@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#6a1b9a">
+<title>Banco Aurora</title>
+<!-- INTERFACE ISCA: PIN normal -> app real | PIN coacao -> isca + alerta silencioso. Marca ficticia. -->
+<style>
+  :root{--roxo:#6a1b9a;--roxo-esc:#4a148c;--texto:#1d1d1f;--cinza:#8e8e93;--fundo:#f5f5f7;--erro:#c62828}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:-apple-system,Roboto,"Segoe UI",sans-serif;background:var(--fundo);color:var(--texto);user-select:none}
+  .hidden{display:none!important}
+  #pinScreen{height:100%;background:var(--roxo);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+  #pinScreen h1{font-size:22px;margin-bottom:8px}
+  #pinScreen p{opacity:.8;font-size:14px;margin-bottom:28px}
+  .dots{display:flex;gap:14px;margin-bottom:32px}
+  .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff}
+  .dot.on{background:#fff}
+  .keypad{display:grid;grid-template-columns:repeat(3,72px);gap:14px}
+  .key{height:72px;border-radius:50%;border:none;background:rgba(255,255,255,.12);color:#fff;font-size:26px}
+  .key:active{background:rgba(255,255,255,.3)}
+  .key.blank{visibility:hidden}
+  header{background:var(--roxo);color:#fff;padding:22px 20px 28px}
+  .top{display:flex;justify-content:space-between;align-items:center}
+  .avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:700}
+  .hello{margin-top:18px;font-size:18px;font-weight:600}
+  main{padding:20px}
+  .card{background:#fff;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .label{font-size:14px;color:var(--cinza);margin-bottom:6px}
+  .saldo{font-size:28px;font-weight:700}
+  .actions{display:flex;gap:12px;overflow-x:auto;margin-bottom:16px}
+  .act{flex:0 0 76px;text-align:center;font-size:12px}
+  .act .ic{width:64px;height:64px;margin:0 auto 6px;border-radius:50%;background:#e9e9ee;display:flex;align-items:center;justify-content:center;font-size:22px}
+  .btn-pix{width:100%;padding:18px;border:none;border-radius:14px;background:var(--roxo);color:#fff;font-size:17px;font-weight:600}
+  .btn-pix:active{background:var(--roxo-esc)}
+  .row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #eee;font-size:15px}
+  .row:last-child{border:none}
+  .row span:last-child{color:var(--cinza)}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:24px;z-index:10}
+  .spinner{width:44px;height:44px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .modal{background:#fff;border-radius:18px;padding:24px;width:100%;max-width:340px;text-align:center}
+  .modal .ico{width:56px;height:56px;border-radius:50%;background:#fdecea;color:var(--erro);font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+  .modal h2{font-size:18px;margin-bottom:8px}
+  .modal p{font-size:14px;color:#555;line-height:1.45}
+  .modal code{display:block;font-size:12px;color:var(--cinza);margin:10px 0 18px}
+  .modal button{width:100%;padding:14px;border:none;border-radius:12px;background:var(--roxo);color:#fff;font-size:16px;font-weight:600}
+</style>
+</head>
+<body>
+
+<section id="pinScreen">
+  <h1>Banco Aurora</h1>
+  <p>Digite sua senha de 4 d&iacute;gitos</p>
+  <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+  <div class="keypad" id="keypad"></div>
+</section>
+
+<section id="appScreen" class="hidden">
+  <header>
+    <div class="top"><div class="avatar">JS</div><div>&#x2709;</div></div>
+    <div class="hello">Ol&aacute;, cliente</div>
+  </header>
+  <main>
+    <div class="card"><div class="label">Saldo dispon&iacute;vel</div><div class="saldo">R$ 4,32</div></div>
+    <div class="actions">
+      <div class="act" data-fake><div class="ic">&#x1F4B8;</div>Transferir</div>
+      <div class="act" data-fake><div class="ic">&#x1F4C4;</div>Pagar</div>
+      <div class="act" data-fake><div class="ic">&#x1F4F1;</div>Recarga</div>
+      <div class="act" data-fake><div class="ic">&#x1F4B3;</div>Cart&atilde;o</div>
+    </div>
+    <button class="btn-pix" id="btnPix">&#x25C6; &Aacute;rea Pix</button>
+    <div class="card" style="margin-top:16px">
+      <div class="label">&Uacute;ltimas movimenta&ccedil;&otilde;es</div>
+      <div class="row"><span>Tarifa mensal</span><span>- R$ 12,90</span></div>
+      <div class="row"><span>Rendimento</span><span>+ R$ 0,02</span></div>
+      <div class="row"><span>Pix enviado</span><span>- R$ 30,00</span></div>
+    </div>
+  </main>
+</section>
+
+<div class="overlay hidden" id="loading"><div class="spinner"></div></div>
+
+<div class="overlay hidden" id="errorModal">
+  <div class="modal">
+    <div class="ico">!</div>
+    <h2>Erro de Timeout</h2>
+    <p>Falha na conex&atilde;o com o servidor. Tente novamente mais tarde.</p>
+    <code id="errCode">ERR_GATEWAY_TIMEOUT (504)</code>
+    <button id="btnOk">OK</button>
+  </div>
+</div>
+
+<script>
+/* CONFIG (producao: vir do app nativo / Keystore) */
+const CONFIG = {
+  ENDPOINT: '/api/v1/security/stealth-alert',
+  DEVICE_ID: 'DEV-ANDROID-0001',
+  AUTH_TOKEN: 'tok_demo_9f8e7d6c5b4a',
+  PIN_NORMAL: '1234',
+  PIN_COACAO: '9999',
+  GEO_TIMEOUT_MS: 8000
+};
+const BACK = '\u232B';
+let pin = '';
+let stealthMode = false;
+
+/* TECLADO */
+function buildKeypad(){
+  const kp = document.getElementById('keypad');
+  ['1','2','3','4','5','6','7','8','9','','0',BACK].forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'key' + (k === '' ? ' blank' : '');
+    b.textContent = k;
+    b.addEventListener('click', () => onKey(k));
+    kp.appendChild(b);
+  });
+}
+function renderDots(){
+  document.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('on', i < pin.length));
+}
+function onKey(k){
+  if (k === BACK) { pin = pin.slice(0,-1); renderDots(); return; }
+  if (pin.length >= 4) return;
+  pin += k; renderDots();
+  if (pin.length === 4) setTimeout(checkPin, 150);
+}
+function checkPin(){
+  if (pin === CONFIG.PIN_COACAO) {
+    stealthMode = true; openApp(); sendStealthAlert('DURESS_LOGIN');
+  } else if (pin === CONFIG.PIN_NORMAL) {
+    stealthMode = false; openApp();
+  } else {
+    pin = ''; renderDots(); navigator.vibrate && navigator.vibrate(150);
+  }
+}
+function openApp(){
+  document.getElementById('pinScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+}
+
+/* COLETA */
+async function getBatteryLevel(){
+  try { if (navigator.getBattery) return Math.round((await navigator.getBattery()).level * 100); } catch(_) {}
+  return null;
+}
+function getLocation(){
+  return new Promise(resolve => {
+    if (!('geolocation' in navigator)) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy_m: Math.round(pos.coords.accuracy),
+        timestamp: new Date(pos.timestamp).toISOString()
+      }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: CONFIG.GEO_TIMEOUT_MS, maximumAge: 0 }
+    );
+  });
+}
+
+/* ENVIO SILENCIOSO */
+async function sendStealthAlert(status){
+  try {
+    const [battery_level, loc] = await Promise.all([getBatteryLevel(), getLocation()]);
+    const payload = {
+      device_id: CONFIG.DEVICE_ID,
+      auth_token: CONFIG.AUTH_TOKEN,
+      status: status,
+      battery_level: battery_level,
+      location: loc || { latitude: null, longitude: null, accuracy_m: null, timestamp: new Date().toISOString() }
+    };
+    await fetch(CONFIG.ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+  } catch (_) { /* silencioso */ }
+}
+
+/* AREA PIX: alerta + erro simulado */
+function onPixClick(){
+  if (stealthMode) sendStealthAlert('PIX_ATTEMPT');
+  const loading = document.getElementById('loading');
+  loading.classList.remove('hidden');
+  setTimeout(() => { loading.classList.add('hidden'); showError(); }, 1200 + Math.random() * 1300);
+}
+function showError(){
+  const codes = ['ERR_GATEWAY_TIMEOUT (504)','ERR_CONN_RESET (-101)','SPI_TIMEOUT (PX-0408)'];
+  document.getElementById('errCode').textContent =
+    codes[Math.floor(Math.random()*codes.length)] + ' \u2022 ' + new Date().toLocaleTimeString('pt-BR');
+  document.getElementById('errorModal').classList.remove('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildKeypad();
+  document.getElementById('btnPix').addEventListener('click', onPixClick);
+  document.getElementById('btnOk').addEventListener('click', () =>
+    document.getElementById('errorModal').classList.add('hidden'));
+  document.querySelectorAll('[data-fake]').forEach(el => el.addEventListener('click', onPixClick));
+});
+</script>
+</body>
+</html>
