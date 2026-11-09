@@ -1,38 +1,62 @@
 /**
- * SERVIDOR DE CONTINGENCIA - Stealth Alert (POC)
- * POST /api/v1/security/stealth-alert
- * Valida JSON + token, responde 200 e roda pipeline assincrono:
- * log (JSONL) + link Maps + mensagem ao contato de emergencia.
+ * ============================================================
+ * SERVIDOR DE CONTINGENCIA - Stealth Alert (v2)
+ * ------------------------------------------------------------
+ * POST /api/v1/security/stealth-alert  -> recebe alertas da isca
+ * POST /api/v1/security/disarm         -> desarma (senha do dono)
+ * GET  /desarmar                       -> pagina simples de desarme
+ *
+ * Canais de alerta (ativos se as variaveis existirem):
+ *  - Telegram : TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+ *  - WhatsApp : WHATSAPP_PHONE + CALLMEBOT_APIKEY (CallMeBot)
+ * Outras variaveis:
+ *  - DISARM_PIN : senha de desarme (padrao 4321 so para teste)
+ *  - PORT       : definida automaticamente pelo Render
  * Requer Node.js 18+.
+ * ============================================================
  */
 'use strict';
+
 const express = require('express');
 const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
 
-/* ---------- CONFIG ---------- */
+/* ============================================================
+   CONFIG
+   ============================================================ */
 const PORT     = process.env.PORT || 3000;
 const LOG_DIR  = path.join(__dirname, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'stealth-alerts.jsonl');
 
-// device_id -> token (producao: banco + hash)
+const DISARM_PIN = process.env.DISARM_PIN || '4321';
+
+// device_id -> token (producao: banco de dados + hash)
 const DEVICE_TOKENS = { 'DEV-ANDROID-0001': 'tok_demo_9f8e7d6c5b4a' };
 
-// device_id -> contato de emergencia
+// device_id -> contato de emergencia (dados vem das variaveis de ambiente)
 const EMERGENCY_CONTACTS = {
   'DEV-ANDROID-0001': {
     name: 'Contato Familiar',
-    phone: '+5500000000000',
-    telegram_chat_id: process.env.TELEGRAM_CHAT_ID || null
+    telegram_chat_id: process.env.TELEGRAM_CHAT_ID || null,
+    whatsapp_phone:   process.env.WHATSAPP_PHONE || null,
+    callmebot_apikey: process.env.CALLMEBOT_APIKEY || null
   }
 };
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
+
 const VALID_STATUS = new Set(['DURESS_LOGIN', 'PIX_ATTEMPT', 'LOCATION_UPDATE']);
+
+// Estado em memoria por aparelho: 'ALERT' (em perigo) | 'SAFE' (desarmado)
+// Producao: guardar em banco (o Render gratis reinicia e zera a memoria).
+const deviceState = new Map();
 
 if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 
-/* ---------- APP ---------- */
+/* ============================================================
+   APP
+   ============================================================ */
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '10kb' }));
@@ -40,12 +64,14 @@ app.use(express.static(__dirname, { index: 'fake_bank.html' }));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
-/* ---------- VALIDACAO ---------- */
+/* ============================================================
+   VALIDACAO
+   ============================================================ */
 function safeEqual(a, b) {
   const A = Buffer.from(String(a)), B = Buffer.from(String(b));
   return A.length === B.length && crypto.timingSafeEqual(A, B);
@@ -58,7 +84,7 @@ function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
 
 function validatePayload(p) {
   if (!p || typeof p !== 'object') return 'body invalido';
-  for (const k of ['device_id','auth_token','status','battery_level','location'])
+  for (const k of ['device_id', 'auth_token', 'status', 'battery_level', 'location'])
     if (!(k in p)) return 'campo ausente: ' + k;
   if (typeof p.device_id !== 'string' || !p.device_id) return 'device_id invalido';
   if (typeof p.auth_token !== 'string' || !p.auth_token) return 'auth_token invalido';
@@ -74,7 +100,9 @@ function validatePayload(p) {
   return null;
 }
 
-/* ---------- ENDPOINT ---------- */
+/* ============================================================
+   ENDPOINT: ALERTA SILENCIOSO
+   ============================================================ */
 app.post('/api/v1/security/stealth-alert', (req, res) => {
   const p = req.body;
   const err = validatePayload(p);
@@ -83,24 +111,89 @@ app.post('/api/v1/security/stealth-alert', (req, res) => {
     console.warn('[AUTH FALHOU] device_id=' + p.device_id);
     return res.status(401).json({ ok: false });
   }
-  res.status(200).json({ ok: true });                // resposta imediata
+  res.status(200).json({ ok: true }); // resposta imediata
   setImmediate(() => processAlert(p).catch(e => console.error('[PIPELINE ERRO]', e.message)));
 });
 
-/* ---------- PIPELINE ---------- */
+/* ============================================================
+   ENDPOINT: DESARME (usado pelo dono, ja em seguranca)
+   ============================================================ */
+app.post('/api/v1/security/disarm', async (req, res) => {
+  const { device_id, auth_token, disarm_pin } = req.body || {};
+  if (!device_id || !auth_token || !disarm_pin)
+    return res.status(400).json({ ok: false, msg: 'Dados incompletos' });
+  if (!isValidToken(device_id, auth_token) || !safeEqual(DISARM_PIN, disarm_pin)) {
+    console.warn('[DESARME NEGADO] device_id=' + device_id);
+    return res.status(401).json({ ok: false, msg: 'Senha incorreta' });
+  }
+
+  deviceState.set(device_id, 'SAFE');
+  const event = { received_at: new Date().toISOString(), device_id, status: 'DISARMED' };
+  console.log('\n[DESARMADO] ' + device_id + ' em ' + event.received_at);
+  await fs.promises.appendFile(LOG_FILE, JSON.stringify(event) + '\n', 'utf8').catch(() => {});
+
+  res.json({ ok: true, msg: 'Modo antifurto desativado' });
+
+  const c = EMERGENCY_CONTACTS[device_id];
+  if (c) dispatchAll(c, 'SITUACAO NORMALIZADA\nO dono desativou o modo antifurto.\nHorario: ' + fmtTime(event.received_at))
+    .catch(e => console.error('[MENSAGERIA ERRO]', e.message));
+});
+
+/* Pagina simples de desarme (o dono abre de qualquer celular) */
+app.get('/desarmar', (req, res) => {
+  res.type('html').send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Desarmar</title>
+<style>body{font-family:Roboto,sans-serif;background:#111;color:#fff;display:flex;min-height:100vh;
+align-items:center;justify-content:center;margin:0;padding:16px}
+.box{width:100%;max-width:340px}h1{font-size:20px}input,button{width:100%;padding:14px;margin-top:12px;
+border-radius:10px;border:1px solid #444;font-size:16px;box-sizing:border-box}input{background:#222;color:#fff}
+button{background:#2e7d32;color:#fff;border:none;font-weight:600}#msg{margin-top:14px}</style></head>
+<body><div class="box"><h1>Desativar modo antifurto</h1>
+<input id="pin" type="password" inputmode="numeric" placeholder="Senha de desarme">
+<button id="go">Desativar</button><div id="msg"></div></div>
+<script>
+document.getElementById('go').onclick = async () => {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Enviando...';
+  try {
+    const r = await fetch('/api/v1/security/disarm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: 'DEV-ANDROID-0001', auth_token: 'tok_demo_9f8e7d6c5b4a',
+                             disarm_pin: document.getElementById('pin').value })
+    });
+    const j = await r.json();
+    msg.textContent = j.msg || (j.ok ? 'OK' : 'Erro');
+  } catch (e) { msg.textContent = 'Falha de conexao'; }
+};
+</script></body></html>`);
+});
+
+/* ============================================================
+   PIPELINE
+   ============================================================ */
 async function processAlert(p) {
+  // Novo login de coacao reativa o modo alerta
+  if (p.status === 'DURESS_LOGIN') deviceState.set(p.device_id, 'ALERT');
+  const state = deviceState.get(p.device_id) || 'ALERT';
+
   const event = {
     received_at: new Date().toISOString(),
     device_id: p.device_id,
     status: p.status,
+    state,
     battery_level: p.battery_level,
     location: p.location,
     maps_link: buildMapsLink(p.location)
   };
   logToConsole(event);
   await fs.promises.appendFile(LOG_FILE, JSON.stringify(event) + '\n', 'utf8');
-  const msg = buildEmergencyMessage(event);
-  if (msg) await dispatchMessage(msg);
+
+  // Desarmado: so registra, nao avisa o contato
+  if (state === 'SAFE') { console.log('[DESARMADO] alerta registrado sem envio'); return; }
+
+  const c = EMERGENCY_CONTACTS[p.device_id];
+  if (!c) { console.warn('[SEM CONTATO] ' + p.device_id); return; }
+  await dispatchAll(c, buildText(event));
 }
 
 function buildMapsLink(loc) {
@@ -108,10 +201,26 @@ function buildMapsLink(loc) {
   return 'https://www.google.com/maps?q=' + loc.latitude + ',' + loc.longitude;
 }
 
+function fmtTime(iso) {
+  return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+function buildText(ev) {
+  const motivo = {
+    DURESS_LOGIN: 'Senha de coacao utilizada',
+    PIX_ATTEMPT: 'Tentativa de Pix no ambiente isca',
+    LOCATION_UPDATE: 'Atualizacao de localizacao'
+  }[ev.status];
+  return 'ALERTA DE SEGURANCA\n' + motivo + '.\n' +
+         'Horario: ' + fmtTime(ev.location.timestamp) + '\n' +
+         'Bateria: ' + (ev.battery_level ?? 'n/d') + '%\n' +
+         'Local: ' + (ev.maps_link ?? 'indisponivel');
+}
+
 function logToConsole(e) {
   console.log('\n================ STEALTH ALERT ================');
   console.log('Recebido : ' + e.received_at);
-  console.log('Device   : ' + e.device_id);
+  console.log('Device   : ' + e.device_id + '  [' + e.state + ']');
   console.log('Status   : ' + e.status);
   console.log('Bateria  : ' + (e.battery_level ?? 'n/d') + '%');
   console.log('GPS em   : ' + e.location.timestamp);
@@ -121,36 +230,47 @@ function logToConsole(e) {
   console.log('===============================================');
 }
 
-function buildEmergencyMessage(ev) {
-  const c = EMERGENCY_CONTACTS[ev.device_id];
-  if (!c) { console.warn('[SEM CONTATO] ' + ev.device_id); return null; }
-  const motivo = {
-    DURESS_LOGIN: 'Senha de coacao utilizada',
-    PIX_ATTEMPT: 'Tentativa de Pix no ambiente isca',
-    LOCATION_UPDATE: 'Atualizacao de localizacao'
-  }[ev.status];
-  const text =
-    'ALERTA DE SEGURANCA\n' + motivo + '.\n' +
-    'Horario: ' + new Date(ev.location.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '\n' +
-    'Bateria: ' + (ev.battery_level ?? 'n/d') + '%\n' +
-    'Local: ' + (ev.maps_link ?? 'indisponivel');
-  return { to: c, channel: TELEGRAM_BOT_TOKEN && c.telegram_chat_id ? 'telegram' : 'simulated', text };
-}
+/* ============================================================
+   MENSAGERIA: envia em paralelo por todos os canais configurados
+   ============================================================ */
+async function dispatchAll(contact, text) {
+  const jobs = [];
+  if (TELEGRAM_BOT_TOKEN && contact.telegram_chat_id) jobs.push(sendTelegram(contact, text));
+  if (contact.whatsapp_phone && contact.callmebot_apikey) jobs.push(sendWhatsApp(contact, text));
 
-async function dispatchMessage(m) {
-  if (m.channel === 'telegram') {
-    const r = await fetch('https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/sendMessage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: m.to.telegram_chat_id, text: m.text })
-    });
-    console.log('[MENSAGERIA] Telegram -> ' + m.to.name + ': HTTP ' + r.status);
+  if (jobs.length === 0) {
+    console.log('[MENSAGERIA SIMULADA] -> ' + contact.name + '\n' + text);
     return;
   }
-  console.log('[MENSAGERIA SIMULADA] -> ' + m.to.name + ' (' + m.to.phone + ')\n' + m.text);
+  const results = await Promise.allSettled(jobs);
+  results.forEach(r => { if (r.status === 'rejected') console.error('[MENSAGERIA ERRO]', r.reason.message); });
 }
 
+async function sendTelegram(c, text) {
+  const r = await fetch('https://api.telegram.org/bot' + TELEGRAM_BOT_TOKEN + '/sendMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: c.telegram_chat_id, text })
+  });
+  console.log('[TELEGRAM] -> ' + c.name + ': HTTP ' + r.status);
+  if (!r.ok) throw new Error('Telegram HTTP ' + r.status + ' ' + await r.text());
+}
+
+async function sendWhatsApp(c, text) {
+  const url = 'https://api.callmebot.com/whatsapp.php' +
+    '?phone=' + encodeURIComponent(c.whatsapp_phone) +
+    '&text=' + encodeURIComponent(text) +
+    '&apikey=' + encodeURIComponent(c.callmebot_apikey);
+  const r = await fetch(url);
+  console.log('[WHATSAPP] -> ' + c.name + ': HTTP ' + r.status);
+  if (!r.ok) throw new Error('WhatsApp HTTP ' + r.status);
+}
+
+/* ============================================================
+   START
+   ============================================================ */
 app.listen(PORT, () => {
-  console.log('Servidor ativo: http://localhost:' + PORT);
-  console.log('Log: ' + LOG_FILE);
+  console.log('Servidor ativo na porta ' + PORT);
+  console.log('Telegram: ' + (TELEGRAM_BOT_TOKEN ? 'ON' : 'OFF') +
+              ' | WhatsApp: ' + (process.env.CALLMEBOT_APIKEY ? 'ON' : 'OFF'));
 });
