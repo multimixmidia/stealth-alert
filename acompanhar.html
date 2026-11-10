@@ -17,6 +17,7 @@
   #banner.alert{background:var(--alert);color:#fff}
   #banner.safe{background:var(--safe);color:#fff}
   #banner.wait{background:#333a43;color:#fff}
+  #banner.track{background:#16667a;color:#fff}
   #banner .pulse{width:9px;height:9px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   #stats{display:flex;gap:8px;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--line);
@@ -106,21 +107,32 @@ function render(d){
 
   if(!last){ setBanner('wait','Aguardando primeira localização…'); }
   else if(d.state==='SAFE'){ setBanner('safe','Desarmado pelo dono — situação normalizada'); }
+  else if(last.status==='LOCATION_UPDATE'){ setBanner('track','Rastreando ao vivo'); }
   else { setBanner('alert','ALERTA ATIVO — rastreando'); }
 
   document.getElementById('sUpd').textContent  = last ? fmtAgo(last.ts) : '—';
   document.getElementById('sBat').textContent  = last && last.battery!=null ? last.battery+'%' : 'n/d';
   document.getElementById('sAcc').textContent  = last && last.acc!=null ? '±'+last.acc+' m' : 'n/d';
 
-  const pts = valid.map(f => [f.lat, f.lng]);
-  if(pts.length){
-    const latlng = pts[pts.length-1];
+  const raw = valid.map(f => [f.lat, f.lng, f.acc || 0]);
+  if(raw.length){
+    // De-jitter: colapsa o tremor de GPS parado — só adiciona ponto à trilha
+    // quando o deslocamento supera a margem de erro (mínimo 25 m).
+    const pts = [];
+    for (const r of raw){
+      const p = [r[0], r[1]];
+      if (!pts.length){ pts.push(p); continue; }
+      const thr = Math.max(25, r[2]);
+      if (haversine(pts[pts.length-1], p) >= thr) pts.push(p);
+    }
+    const latlng = [raw[raw.length-1][0], raw[raw.length-1][1]];
     lastLatLng = latlng;
     document.getElementById('sCoord').textContent = latlng[0].toFixed(5)+', '+latlng[1].toFixed(5);
     document.getElementById('mapsLink').href = 'https://www.google.com/maps?q=' + latlng[0] + ',' + latlng[1];
 
+    // Movimento: só conta como movimento o que supera a margem de erro
     let mv='Parado';
-    if(pts.length>=2) mv = haversine(pts[pts.length-2], pts[pts.length-1])>35 ? 'Em movimento' : 'Parado';
+    if(pts.length>=2) mv = 'Em movimento';
     document.getElementById('sMove').textContent = mv;
 
     if(mapOk){
