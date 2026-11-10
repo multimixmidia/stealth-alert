@@ -6,6 +6,9 @@ on:
     paths: [ 'app/**', '.github/workflows/android.yml' ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,8 +38,16 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload APK (artefato)
         uses: actions/upload-artifact@v4
         with:
           name: originali-debug-apk
           path: app/android/app/build/outputs/apk/debug/*.apk
+
+      - name: Publicar APK como Release (link direto)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-latest
+          name: Originali (debug)
+          prerelease: true
+          files: app/android/app/build/outputs/apk/debug/*.apk
