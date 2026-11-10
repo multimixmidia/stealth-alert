@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e3a39">
-<title>Banco</title>
+<title>Originali</title>
 <!--
   ============================================================
   INTERFACE ISCA (decoy) — banco PROPRIO, nao copia marca real
@@ -35,9 +35,11 @@
   #lock{position:fixed;inset:0;background:var(--brand);color:#fff;display:flex;flex-direction:column;
         align-items:center;max-width:440px;margin:0 auto}
   #lock .top{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px}
-  .mark{width:52px;height:52px;border-radius:15px;background:var(--brand-ink);color:var(--brand);
-        display:flex;align-items:center;justify-content:center;font-weight:800;font-size:24px;letter-spacing:-1px}
-  #lock h1{font-size:17px;font-weight:600;opacity:.95}
+  .mark{width:50px;height:50px;border-radius:15px;background:var(--brand-ink);color:var(--brand);
+        display:flex;align-items:center;justify-content:center}
+  .mark svg{width:28px;height:28px}
+  .wordmark{font-size:26px;font-weight:800;letter-spacing:-.5px;color:#fff}
+  #lock h1{font-size:13.5px;font-weight:500;color:rgba(255,255,255,.7);margin-top:-12px}
   .dots{display:flex;gap:16px}
   .dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.28)}
   .dot.on{background:#fff}
@@ -160,7 +162,8 @@
 <!-- ===================== LOCK ===================== -->
 <section id="lock">
   <div class="top">
-    <div class="mark">b</div>
+    <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg></div>
+    <div class="wordmark">Originali</div>
     <h1>Acesse sua conta</h1>
     <div class="dots" id="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
   </div>
