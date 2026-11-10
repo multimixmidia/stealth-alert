@@ -66,7 +66,7 @@ let map=null, marker=null, trail=null, lastLatLng=null, autoCenter=true, mapOk=f
 function initMap(){
   if (typeof L === 'undefined') throw new Error('leaflet ausente');
   map = L.map('map', { zoomControl:true }).setView([-15.78,-47.92], 4);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:20, subdomains:'abcd', attribution:'© OpenStreetMap, © CARTO' }).addTo(map);
   map.on('dragstart', () => autoCenter=false);
   trail = L.polyline([], { color:'#3a7afe', weight:4, opacity:.8 }).addTo(map);
   mapOk = true;

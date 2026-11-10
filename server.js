@@ -39,6 +39,7 @@ const MAX_FIXES = 300;
 
 // device_id -> token (producao: banco de dados + hash)
 const DEVICE_TOKENS = { 'DEV-ANDROID-0001': 'tok_demo_9f8e7d6c5b4a' };
+const SHARED_TOKEN = process.env.SHARED_TOKEN || 'tok_demo_9f8e7d6c5b4a'; // prototipo: token unico p/ membros
 
 // device_id -> contato de emergencia (dados vem das variaveis de ambiente)
 const EMERGENCY_CONTACTS = {
@@ -83,6 +84,7 @@ function safeEqual(a, b) {
   return A.length === B.length && crypto.timingSafeEqual(A, B);
 }
 function isValidToken(id, tok) {
+  if (typeof tok === 'string' && safeEqual(SHARED_TOKEN, tok)) return true; // token compartilhado
   const exp = DEVICE_TOKENS[id];
   return Boolean(exp) && safeEqual(exp, tok);
 }
@@ -186,6 +188,49 @@ app.get('/api/v1/track', (req, res) => {
   const id = req.query.id;
   if (TRACK_KEY && req.query.k !== TRACK_KEY) return res.status(401).json({ ok: false });
   res.json({ ok: true, device_id: id, state: deviceState.get(id) || 'ALERT', fixes: tracks.get(id) || [] });
+});
+
+/* ============================================================
+   MEMBROS (familia) + "Localizar agora"
+   ============================================================ */
+const members = new Map();     // account -> Map(id -> { name })
+const locateReq = new Set();   // device_ids que pediram posicao agora
+
+// Cadastra/atualiza um membro de uma conta
+app.post('/api/v1/register', (req, res) => {
+  const { account, device_id, name } = req.body || {};
+  if (!account || !device_id) return res.status(400).json({ ok: false });
+  if (!members.has(account)) members.set(account, new Map());
+  members.get(account).set(device_id, { name: (name || device_id).slice(0, 40) });
+  console.log('[MEMBRO] ' + account + ' <- ' + device_id + ' (' + name + ')');
+  res.json({ ok: true });
+});
+
+// Lista membros + ultima posicao de cada um
+app.get('/api/v1/members', (req, res) => {
+  const account = req.query.account;
+  const m = members.get(account) || new Map();
+  const list = [...m.entries()].map(([id, info]) => {
+    const fixes = tracks.get(id) || [];
+    return { id, name: info.name, last: fixes.length ? fixes[fixes.length - 1] : null, fixes };
+  });
+  res.json({ ok: true, account, members: list });
+});
+
+// Painel pede uma posicao fresca de um aparelho
+app.post('/api/v1/locate', (req, res) => {
+  const { device_id } = req.body || {};
+  if (!device_id) return res.status(400).json({ ok: false });
+  locateReq.add(device_id);
+  res.json({ ok: true });
+});
+
+// O app de rastreio pergunta se ha pedido pendente (e limpa)
+app.get('/api/v1/locate-check', (req, res) => {
+  const id = req.query.id;
+  const want = locateReq.has(id);
+  if (want) locateReq.delete(id);
+  res.json({ ok: true, locate: want });
 });
 
 /* ============================================================
