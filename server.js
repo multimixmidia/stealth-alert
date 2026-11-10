@@ -30,6 +30,12 @@ const LOG_DIR  = path.join(__dirname, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'stealth-alerts.jsonl');
 
 const DISARM_PIN = process.env.DISARM_PIN || '4321';
+const BASE_URL   = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || ('http://localhost:' + PORT)).replace(/\/$/, '');
+const TRACK_KEY  = process.env.TRACK_KEY || null;   // opcional: protege o link de acompanhamento
+
+// device_id -> trilha de posicoes em memoria (ultimas N)
+const tracks = new Map();
+const MAX_FIXES = 300;
 
 // device_id -> token (producao: banco de dados + hash)
 const DEVICE_TOKENS = { 'DEV-ANDROID-0001': 'tok_demo_9f8e7d6c5b4a' };
@@ -169,6 +175,15 @@ document.getElementById('go').onclick = async () => {
 });
 
 /* ============================================================
+   ENDPOINT: TRILHA (pagina de acompanhamento ao vivo)
+   ============================================================ */
+app.get('/api/v1/track', (req, res) => {
+  const id = req.query.id;
+  if (TRACK_KEY && req.query.k !== TRACK_KEY) return res.status(401).json({ ok: false });
+  res.json({ ok: true, device_id: id, state: deviceState.get(id) || 'ALERT', fixes: tracks.get(id) || [] });
+});
+
+/* ============================================================
    PIPELINE
    ============================================================ */
 async function processAlert(p) {
@@ -186,6 +201,11 @@ async function processAlert(p) {
     maps_link: buildMapsLink(p.location)
   };
   logToConsole(event);
+  pushFix(p.device_id, {
+    lat: p.location.latitude, lng: p.location.longitude,
+    acc: p.location.accuracy_m ?? null, battery: p.battery_level,
+    ts: event.received_at, status: p.status, state
+  });
   await fs.promises.appendFile(LOG_FILE, JSON.stringify(event) + '\n', 'utf8');
 
   // Desarmado: so registra, nao avisa o contato
@@ -201,6 +221,17 @@ function buildMapsLink(loc) {
   return 'https://www.google.com/maps?q=' + loc.latitude + ',' + loc.longitude;
 }
 
+function pushFix(id, fix) {
+  if (!tracks.has(id)) tracks.set(id, []);
+  const arr = tracks.get(id);
+  arr.push(fix);
+  if (arr.length > MAX_FIXES) arr.splice(0, arr.length - MAX_FIXES);
+}
+function trackLink(id) {
+  return BASE_URL + '/acompanhar.html?id=' + encodeURIComponent(id) +
+         (TRACK_KEY ? '&k=' + encodeURIComponent(TRACK_KEY) : '');
+}
+
 function fmtTime(iso) {
   return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
@@ -214,7 +245,8 @@ function buildText(ev) {
   return 'ALERTA DE SEGURANCA\n' + motivo + '.\n' +
          'Horario: ' + fmtTime(ev.location.timestamp) + '\n' +
          'Bateria: ' + (ev.battery_level ?? 'n/d') + '%\n' +
-         'Local: ' + (ev.maps_link ?? 'indisponivel');
+         'Acompanhar ao vivo: ' + trackLink(ev.device_id) + '\n' +
+         'Local agora: ' + (ev.maps_link ?? 'indisponivel');
 }
 
 function logToConsole(e) {
