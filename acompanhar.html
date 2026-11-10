@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#111418">
 <title>Acompanhar localização</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
-  integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin="">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
 <style>
   :root{--bg:#111418;--panel:#191d23;--line:#2a2f37;--txt:#f1f3f5;--mut:#9aa2ad;
         --alert:#d13b3b;--safe:#1f9d57;--accent:#3a7afe}
@@ -25,8 +24,10 @@
   #stats::-webkit-scrollbar{display:none}
   .chip{flex:0 0 auto;background:#0e1115;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
   .chip .k{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
-  .chip .v{font-size:15px;font-weight:700;margin-top:2px}
-  #map{flex:1;background:#0b0d10}
+  .chip .v{font-size:15px;font-weight:700;margin-top:2px;white-space:nowrap}
+  #map{flex:1;background:#0b0d10;min-height:180px}
+  #fallback{flex:1;display:none;align-items:center;justify-content:center;text-align:center;
+            color:var(--mut);font-size:13px;padding:24px;line-height:1.5}
   #bar{display:flex;gap:10px;padding:12px;background:var(--panel);border-top:1px solid var(--line)}
   #bar a,#bar button{flex:1;text-align:center;text-decoration:none;border:none;border-radius:11px;
        padding:13px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
@@ -43,32 +44,33 @@
   <div class="chip"><div class="k">Situação</div><div class="v" id="sMove">—</div></div>
   <div class="chip"><div class="k">Bateria</div><div class="v" id="sBat">—</div></div>
   <div class="chip"><div class="k">Precisão</div><div class="v" id="sAcc">—</div></div>
+  <div class="chip"><div class="k">Coordenadas</div><div class="v" id="sCoord">—</div></div>
 </div>
 <div id="map"></div>
+<div id="fallback">Carregando mapa… se não aparecer, use <b style="color:#fff">&nbsp;Abrir no Google Maps</b>&nbsp;abaixo. Os dados acima continuam atualizando.</div>
 <div id="bar">
   <a class="maps" id="mapsLink" href="#" target="_blank" rel="noopener">Abrir no Google Maps</a>
   <button class="center" onclick="recenter()">Centralizar</button>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
-  integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hqWBstR0FwxaUJ+jgQZ/ZuNQr9qfMd1ENyGE3FH8T2jVa0Ii6jlh0Y7RK1UG4Q==" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
 <script>
 const q = new URLSearchParams(location.search);
 const ID = q.get('id') || 'DEV-ANDROID-0001';
 const K  = q.get('k') || '';
 const URLT = '/api/v1/track?id=' + encodeURIComponent(ID) + (K ? '&k=' + encodeURIComponent(K) : '');
 
-let map, marker, trail, lastLatLng=null, autoCenter=true;
+let map=null, marker=null, trail=null, lastLatLng=null, autoCenter=true, mapOk=false;
 
 function initMap(){
-  map = L.map('map', { zoomControl:true }).setView([-15.78,-47.92], 4); // Brasil
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom:19, attribution:'© OpenStreetMap'
-  }).addTo(map);
+  if (typeof L === 'undefined') throw new Error('leaflet ausente');
+  map = L.map('map', { zoomControl:true }).setView([-15.78,-47.92], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
   map.on('dragstart', () => autoCenter=false);
   trail = L.polyline([], { color:'#3a7afe', weight:4, opacity:.8 }).addTo(map);
+  mapOk = true;
 }
-function recenter(){ autoCenter=true; if(lastLatLng) map.setView(lastLatLng, 16); }
+function recenter(){ autoCenter=true; if(mapOk && lastLatLng) map.setView(lastLatLng, 16); }
 
 function fmtAgo(iso){
   const s = Math.max(0, Math.round((Date.now()-new Date(iso).getTime())/1000));
@@ -82,62 +84,61 @@ function haversine(a,b){
   const s=Math.sin(dLat/2)**2 + Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dLng/2)**2;
   return 2*R*Math.asin(Math.sqrt(s));
 }
-
-async function poll(){
-  try{
-    const r = await fetch(URLT, { cache:'no-store' });
-    if(!r.ok) throw new Error('http '+r.status);
-    const d = await r.json();
-    render(d);
-  }catch(e){
-    setBanner('wait','Sem conexão com o servidor…');
-  }
-  setTimeout(poll, 8000);
-}
-
 function setBanner(cls, txt){
   const b=document.getElementById('banner');
   b.className=cls; document.getElementById('bannerTxt').textContent=txt;
 }
 
+async function poll(){
+  try{
+    const r = await fetch(URLT, { cache:'no-store' });
+    if(!r.ok) throw new Error('http '+r.status);
+    render(await r.json());
+  }catch(e){
+    setBanner('wait','Sem conexão com o servidor…');
+  }
+  setTimeout(poll, 7000);
+}
+
 function render(d){
-  const fixes = (d.fixes||[]).filter(f => typeof f.lat==='number' && typeof f.lng==='number');
+  const valid = (d.fixes||[]).filter(f => typeof f.lat==='number' && typeof f.lng==='number');
   const last = d.fixes && d.fixes.length ? d.fixes[d.fixes.length-1] : null;
 
-  // banner
   if(!last){ setBanner('wait','Aguardando primeira localização…'); }
   else if(d.state==='SAFE'){ setBanner('safe','Desarmado pelo dono — situação normalizada'); }
   else { setBanner('alert','ALERTA ATIVO — rastreando'); }
 
-  // stats
-  document.getElementById('sUpd').textContent = last ? fmtAgo(last.ts) : '—';
-  document.getElementById('sBat').textContent = last && last.battery!=null ? last.battery+'%' : 'n/d';
-  document.getElementById('sAcc').textContent = last && last.acc!=null ? '±'+last.acc+' m' : 'n/d';
+  document.getElementById('sUpd').textContent  = last ? fmtAgo(last.ts) : '—';
+  document.getElementById('sBat').textContent  = last && last.battery!=null ? last.battery+'%' : 'n/d';
+  document.getElementById('sAcc').textContent  = last && last.acc!=null ? '±'+last.acc+' m' : 'n/d';
 
-  // trilha + marcador
-  const pts = fixes.map(f => [f.lat, f.lng]);
+  const pts = valid.map(f => [f.lat, f.lng]);
   if(pts.length){
-    trail.setLatLngs(pts);
     const latlng = pts[pts.length-1];
     lastLatLng = latlng;
-    if(!marker){ marker = L.circleMarker(latlng, { radius:9, color:'#fff', weight:3, fillColor:'#d13b3b', fillOpacity:1 }).addTo(map); }
-    else marker.setLatLng(latlng);
-    if(autoCenter) map.setView(latlng, Math.max(map.getZoom(),16));
+    document.getElementById('sCoord').textContent = latlng[0].toFixed(5)+', '+latlng[1].toFixed(5);
     document.getElementById('mapsLink').href = 'https://www.google.com/maps?q=' + latlng[0] + ',' + latlng[1];
 
-    // movimento
     let mv='Parado';
-    if(pts.length>=2){
-      const dist = haversine(pts[pts.length-2], pts[pts.length-1]);
-      mv = dist>35 ? 'Em movimento' : 'Parado';
-    }
+    if(pts.length>=2) mv = haversine(pts[pts.length-2], pts[pts.length-1])>35 ? 'Em movimento' : 'Parado';
     document.getElementById('sMove').textContent = mv;
+
+    if(mapOk){
+      trail.setLatLngs(pts);
+      if(!marker) marker = L.circleMarker(latlng, { radius:9, color:'#fff', weight:3, fillColor:'#d13b3b', fillOpacity:1 }).addTo(map);
+      else marker.setLatLng(latlng);
+      if(autoCenter) map.setView(latlng, Math.max(map.getZoom(),16));
+    }
   } else {
     document.getElementById('sMove').textContent = last ? 'Sem GPS' : '—';
+    document.getElementById('sCoord').textContent = last ? 'sem GPS' : '—';
   }
 }
 
-initMap();
+// Mapa é opcional: se falhar, mostramos os dados mesmo assim e seguimos buscando.
+try { initMap(); }
+catch(e){ document.getElementById('map').style.display='none'; document.getElementById('fallback').style.display='flex'; }
+if(!mapOk){ document.getElementById('map').style.display='none'; document.getElementById('fallback').style.display='flex'; }
 poll();
 </script>
 </body>
