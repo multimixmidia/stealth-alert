@@ -174,6 +174,11 @@ document.getElementById('go').onclick = async () => {
 </script></body></html>`);
 });
 
+/* Rota de verificacao de versao (para confirmar deploy) */
+app.get('/version', (req, res) => {
+  res.json({ version: 'v3-location-skip', deployed_at: new Date().toISOString() });
+});
+
 /* ============================================================
    ENDPOINT: TRILHA (pagina de acompanhamento ao vivo)
    ============================================================ */
