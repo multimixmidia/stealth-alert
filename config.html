@@ -64,6 +64,23 @@
   <div class="banks" id="banks"></div>
   <label>Nome exibido (opcional)</label>
   <input type="text" id="bankName" placeholder="Usar o nome do tema">
+
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px">
+    <input type="checkbox" id="useColor" style="width:auto;flex:0 0 auto"> Usar cor personalizada
+  </label>
+  <input type="color" id="color" value="#0e3a39" style="height:46px;padding:4px">
+
+  <label>Logo próprio (opcional)</label>
+  <div style="display:flex;gap:10px;align-items:center">
+    <button type="button" class="go open" style="flex:0 0 auto;padding:10px 14px;font-size:14px"
+            onclick="document.getElementById('logoFile').click()">Enviar logo</button>
+    <div id="logoPrev" style="width:46px;height:46px;border-radius:10px;border:1px solid var(--line);
+         display:none;background-color:#fff;background-size:contain;background-position:center;background-repeat:no-repeat"></div>
+    <button type="button" id="logoClear" onclick="clearLogo()"
+            style="background:none;border:none;color:#d9b45b;font-family:inherit;font-weight:600;display:none;cursor:pointer">remover</button>
+  </div>
+  <input type="file" id="logoFile" accept="image/*" hidden>
+  <div class="warn">Use uma imagem sua ou original. Não use o logo de um banco real.</div>
 </div>
 
 <!-- DADOS -->
@@ -109,7 +126,7 @@ const THEMES={
     mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 5 3.4 7.8 8.5 9-5.1 1.2-7.9 4-8.5 9-.6-5-3.4-7.8-8.5-9 5.1-1.2 7.9-4 8.5-9z"/></svg>'}
 };
 const KEY='decoyBank';
-let cfg=load()||{theme:'originali',bankName:'',name:'João',balance:'4,32',duress:'9999',real:'1234'};
+let cfg=load()||{theme:'originali',bankName:'',name:'João',balance:'4,32',duress:'9999',real:'1234',color:'',logo:''};
 
 function load(){try{return JSON.parse(localStorage.getItem(KEY));}catch(_){return null;}}
 
@@ -131,6 +148,7 @@ function collect(){
   cfg.balance=document.getElementById('balance').value.trim()||'0,00';
   cfg.duress=(document.getElementById('duress').value||'9999').replace(/\D/g,'').slice(0,4);
   cfg.real=(document.getElementById('real').value||'1234').replace(/\D/g,'').slice(0,4);
+  cfg.color=document.getElementById('useColor').checked ? document.getElementById('color').value : '';
 }
 function flash(t){const m=document.getElementById('msg');m.textContent=t;setTimeout(()=>{if(m.textContent===t)m.textContent='';},3500);}
 
@@ -143,12 +161,39 @@ function save(){
 }
 function openDecoy(){ save(); location.href='fake_bank.html'; }
 
+/* logo proprio */
+function compressLogo(file){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxW=256, s=Math.min(1,maxW/img.width);
+      const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s;
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      res(c.toDataURL('image/png'));
+    };
+    img.src=URL.createObjectURL(file);
+  });
+}
+document.getElementById('logoFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  cfg.logo=await compressLogo(f); showLogo(); e.target.value='';
+});
+function showLogo(){
+  const prev=document.getElementById('logoPrev'), clr=document.getElementById('logoClear');
+  if(cfg.logo){ prev.style.backgroundImage='url('+cfg.logo+')'; prev.style.display='block'; clr.style.display='inline'; }
+  else { prev.style.display='none'; clr.style.display='none'; }
+}
+function clearLogo(){ cfg.logo=''; showLogo(); }
+
 /* init */
 document.getElementById('bankName').value=cfg.bankName||'';
 document.getElementById('name').value=cfg.name||'João';
 document.getElementById('balance').value=cfg.balance||'4,32';
 document.getElementById('duress').value=cfg.duress||'9999';
 document.getElementById('real').value=cfg.real||'1234';
+document.getElementById('useColor').checked=!!cfg.color;
+document.getElementById('color').value=cfg.color||'#0e3a39';
+showLogo();
 renderBanks();
 </script>
 </body>
