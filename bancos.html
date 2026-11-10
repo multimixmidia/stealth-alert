@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0e3a39">
+<title>Bancos · preview</title>
+<!--
+  ============================================================
+  INTERFACE ISCA (decoy) — banco PROPRIO, nao copia marca real
+  ------------------------------------------------------------
+  Lock -> senha de coacao (9999) abre a conta com saldo baixo.
+  "Pix" -> dispara alerta silencioso + erro de conexao simulado.
+  Nome/cor configuraveis em CONFIG (depois: tela de setup).
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brand:#0e3a39; --brand-2:#14504e; --brand-ink:#eafaf3;
+    --bg:#eef1ef; --card:#ffffff; --ink:#132320; --muted:#6c7c78;
+    --line:#e5e9e6; --pos:#1a8f59; --chip:#f0f3f1;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:"Manrope",-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--ink);
+       -webkit-font-smoothing:antialiased;user-select:none}
+  .hidden{display:none!important}
+  svg{display:block}
+  .app{max-width:440px;margin:0 auto;min-height:100%;position:relative}
+
+  /* ============ LOCK ============ */
+  #lock{position:fixed;inset:0;background:var(--brand);color:#fff;display:flex;flex-direction:column;
+        align-items:center;max-width:440px;margin:0 auto}
+  #lock .top{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px}
+  .mark{width:50px;height:50px;border-radius:15px;background:var(--brand-ink);color:var(--brand);
+        display:flex;align-items:center;justify-content:center}
+  .mark svg{width:28px;height:28px}
+  .wordmark{font-size:26px;font-weight:800;letter-spacing:-.5px;color:#fff}
+  #lock h1{font-size:13.5px;font-weight:500;color:rgba(255,255,255,.7);margin-top:-12px}
+  .dots{display:flex;gap:16px}
+  .dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.28)}
+  .dot.on{background:#fff}
+  .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:100%;max-width:330px;padding:0 24px 30px}
+  .key{height:68px;border:none;background:transparent;color:#fff;font-size:25px;font-weight:600;
+       font-family:inherit;border-radius:14px}
+  .key:active{background:rgba(255,255,255,.14)}
+  .key.fn{font-size:14px;font-weight:600;opacity:.85}
+  .forgot{color:rgba(255,255,255,.75);font-size:13px;margin-bottom:8px}
+
+  /* ============ HEADER ============ */
+  header{background:var(--brand);color:#fff;padding:18px 20px 64px;border-radius:0 0 26px 26px}
+  .hrow{display:flex;align-items:center;justify-content:space-between}
+  .who{display:flex;align-items:center;gap:12px}
+  .avatar{width:40px;height:40px;border-radius:50%;background:var(--brand-2);color:#fff;
+          display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+  .who .g{font-size:12px;color:rgba(255,255,255,.7);line-height:1.2}
+  .who .n{font-size:15px;font-weight:700}
+  .hicons{display:flex;gap:18px;color:#fff}
+  .hicons svg{width:22px;height:22px;opacity:.92}
+
+  /* ============ SALDO ============ */
+  main{padding:0 16px 96px;margin-top:-46px}
+  .balance{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 18px 6px}
+  .bhead{display:flex;align-items:center;justify-content:space-between}
+  .bhead .lab{font-size:13px;color:var(--muted);font-weight:600}
+  .bhead svg{width:19px;height:19px;color:var(--muted)}
+  .bval{font-size:27px;font-weight:800;letter-spacing:-.5px;margin-top:4px}
+  .bval small{font-size:15px;font-weight:700;color:var(--muted);margin-right:3px}
+  .bsub{display:flex;gap:18px;border-top:1px solid var(--line);margin-top:14px}
+  .bsub a{flex:1;text-align:center;padding:12px 0;font-size:13px;font-weight:600;color:var(--brand-2);
+          text-decoration:none}
+  .bsub a:first-child{border-right:1px solid var(--line)}
+
+  /* ============ ACOES ============ */
+  .actions{display:flex;gap:6px;overflow-x:auto;padding:18px 2px 6px;scrollbar-width:none}
+  .actions::-webkit-scrollbar{display:none}
+  .act{flex:0 0 72px;background:none;border:none;font-family:inherit;display:flex;flex-direction:column;
+       align-items:center;gap:7px;color:var(--ink);cursor:pointer}
+  .act .ic{width:52px;height:52px;border-radius:16px;background:var(--chip);display:flex;
+           align-items:center;justify-content:center;color:var(--brand-2)}
+  .act .ic svg{width:23px;height:23px}
+  .act span{font-size:11.5px;font-weight:600}
+
+  /* ============ CARTAO ============ */
+  .sect{font-size:13px;font-weight:700;color:var(--muted);margin:20px 4px 10px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;
+        display:flex;align-items:center;gap:14px}
+  .tile .ci{width:42px;height:42px;border-radius:12px;background:var(--chip);color:var(--brand-2);
+            display:flex;align-items:center;justify-content:center}
+  .tile .ci svg{width:21px;height:21px}
+  .tile .t1{font-size:14px;font-weight:700}
+  .tile .t2{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .tile .r{margin-left:auto;text-align:right}
+  .tile .r b{font-size:14px;font-weight:800}
+
+  /* ============ EXTRATO ============ */
+  .ext{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .tx{display:flex;align-items:center;gap:13px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .tx:last-child{border-bottom:none}
+  .tx .ti{width:38px;height:38px;border-radius:50%;background:var(--chip);color:var(--brand-2);
+          display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .tx .ti svg{width:18px;height:18px}
+  .tx .m{flex:1;min-width:0}
+  .tx .m .a{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tx .m .b{font-size:12px;color:var(--muted);margin-top:2px}
+  .tx .v{font-size:14px;font-weight:700;white-space:nowrap}
+  .tx .v.pos{color:var(--pos)}
+
+  /* ============ NAV ============ */
+  nav{position:fixed;bottom:0;left:0;right:0;max-width:440px;margin:0 auto;background:#fff;
+      border-top:1px solid var(--line);display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+  nav button{flex:1;background:none;border:none;font-family:inherit;display:flex;flex-direction:column;
+             align-items:center;gap:4px;color:var(--muted);font-size:10.5px;font-weight:600;padding:4px 0}
+  nav button svg{width:22px;height:22px}
+  nav button.on{color:var(--brand-2)}
+
+  /* ============ TELA PIX ============ */
+  #pix{position:fixed;inset:0;background:var(--bg);max-width:440px;margin:0 auto;z-index:20;
+       transform:translateX(100%);transition:transform .22s ease}
+  #pix.show{transform:none}
+  .pixhead{background:var(--brand);color:#fff;padding:16px 16px 20px;display:flex;align-items:center;gap:14px}
+  .pixhead svg{width:24px;height:24px}
+  .pixhead h2{font-size:17px;font-weight:700}
+  .pixbody{padding:18px 16px}
+  .pixgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .pixcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;
+           display:flex;flex-direction:column;gap:12px;cursor:pointer;font-family:inherit;text-align:left}
+  .pixcard .ci{width:40px;height:40px;border-radius:11px;background:var(--chip);color:var(--brand-2);
+               display:flex;align-items:center;justify-content:center}
+  .pixcard .ci svg{width:21px;height:21px}
+  .pixcard b{font-size:14px;font-weight:700}
+  .pixcard span{font-size:12px;color:var(--muted);line-height:1.35}
+  .keyline{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;
+           margin-top:12px;display:flex;align-items:center;gap:13px}
+  .keyline .ci{width:40px;height:40px;border-radius:11px;background:var(--chip);color:var(--brand-2);
+               display:flex;align-items:center;justify-content:center}
+  .keyline .ci svg{width:20px;height:20px}
+
+  /* ============ LOADING + ERRO ============ */
+  .overlay{position:fixed;inset:0;background:rgba(10,20,18,.5);display:none;align-items:center;
+           justify-content:center;padding:26px;z-index:40}
+  .overlay.show{display:flex}
+  .spin{width:42px;height:42px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;
+        border-radius:50%;animation:sp .8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .modal{background:#fff;border-radius:20px;padding:24px;width:100%;max-width:330px;text-align:center}
+  .modal .ic{width:52px;height:52px;border-radius:50%;background:#fdeceb;color:#c53929;margin:0 auto 14px;
+             display:flex;align-items:center;justify-content:center}
+  .modal .ic svg{width:26px;height:26px}
+  .modal h3{font-size:17px;font-weight:700;margin-bottom:8px}
+  .modal p{font-size:13.5px;color:#55605d;line-height:1.5}
+  .modal code{display:block;font-size:11px;color:#9aa5a1;margin:12px 0 18px;font-family:ui-monospace,monospace}
+  .modal button{width:100%;padding:14px;border:none;border-radius:12px;background:var(--brand);color:#fff;
+                font-size:15px;font-weight:700;font-family:inherit}
+
+  /* ============ PREVIEW SWITCHER (so no preview) ============ */
+  #sw{position:fixed;top:0;left:0;right:0;max-width:440px;margin:0 auto;z-index:60;
+      background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:flex;gap:6px;align-items:center;
+      padding:8px 10px;overflow-x:auto;scrollbar-width:none}
+  #sw::-webkit-scrollbar{display:none}
+  #sw .lab{font-size:11px;color:#cfd6d3;font-weight:700;flex:0 0 auto}
+  #sw button{flex:0 0 auto;border:1px solid rgba(255,255,255,.28);background:transparent;color:#fff;
+       font-family:inherit;font-size:12px;font-weight:600;padding:6px 13px;border-radius:20px}
+  #sw button.on{background:#fff;color:#111;border-color:#fff}
+</style>
+</head>
+<body>
+
+<div id="sw">
+  <span class="lab">Preview:</span>
+  <button data-t="originali" class="on">Originali</button>
+  <button data-t="nevo">Nevo</button>
+  <button data-t="vexa">Vexa</button>
+  <button id="swAcesso">↺ acesso</button>
+</div>
+
+<!-- ===================== LOCK ===================== -->
+<section id="lock">
+  <div class="top">
+    <div class="mark" id="markBox"></div>
+    <div class="wordmark" id="wordmark">Originali</div>
+    <h1>Acesse sua conta</h1>
+    <div class="dots" id="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+  </div>
+  <div class="forgot">Esqueci minha senha</div>
+  <div class="pad" id="pad"></div>
+</section>
+
+<!-- ===================== CONTA ===================== -->
+<div class="app" id="home" style="display:none">
+  <header>
+    <div class="hrow">
+      <div class="who">
+        <div class="avatar" id="avatarIni">J</div>
+        <div>
+          <div class="g">boa noite,</div>
+          <div class="n" id="userName">João</div>
+        </div>
+      </div>
+      <div class="hicons">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M18 8a6 6 0 10-12 0c0 7-2 9-2 9h16s-2-2-2-9"/><path d="M10 20a2 2 0 004 0"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="balance">
+      <div class="bhead">
+        <div class="lab">Saldo em conta</div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+      </div>
+      <div class="bval"><small>R$</small>4,32</div>
+      <div class="bsub">
+        <a href="#" onclick="return false">Extrato</a>
+        <a href="#" onclick="return false">Gerenciar cartões</a>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="act" onclick="openPix()">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l3.5 3.5a2 2 0 010 2.8L12 12.8 8.5 9.3a2 2 0 010-2.8L12 3z"/><path d="M12 11.2l3.5 3.5a2 2 0 010 2.8L12 21l-3.5-3.5a2 2 0 010-2.8L12 11.2z"/></svg></span>
+        <span>Pix</span>
+      </button>
+      <button class="act" onclick="openPix()">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12" stroke-width="1.4"/></svg></span>
+        <span>Pagar</span>
+      </button>
+      <button class="act" onclick="openPix()">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+        <span>Transferir</span>
+      </button>
+      <button class="act" onclick="openPix()">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M13 13h3v3M20 20v.01M16 20v-3"/></svg></span>
+        <span>Cobrar</span>
+      </button>
+      <button class="act" onclick="openPix()">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/></svg></span>
+        <span>Recarga</span>
+      </button>
+    </div>
+
+    <div class="sect">Cartão de crédito</div>
+    <div class="tile">
+      <div class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg></div>
+      <div>
+        <div class="t1">Fatura atual</div>
+        <div class="t2">Vence em 10/dez</div>
+      </div>
+      <div class="r"><b>R$ 0,00</b></div>
+    </div>
+
+    <div class="sect">Últimas movimentações</div>
+    <div class="ext">
+      <div class="tx">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 8H7l3-3M4 16h13l-3 3"/></svg></div>
+        <div class="m"><div class="a">Pix enviado · Mercado São Jorge</div><div class="b">Ontem, 19:42</div></div>
+        <div class="v">- R$ 28,90</div>
+      </div>
+      <div class="tx">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg></div>
+        <div class="m"><div class="a">Compra no débito · Posto Ipiranga</div><div class="b">08/nov, 14:15</div></div>
+        <div class="v">- R$ 50,00</div>
+      </div>
+      <div class="tx">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 16H17l-3 3M20 8H7l3-3"/></svg></div>
+        <div class="m"><div class="a">Pix recebido · Maria C. Santos</div><div class="b">07/nov, 09:03</div></div>
+        <div class="v pos">+ R$ 15,00</div>
+      </div>
+      <div class="tx">
+        <div class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 1.5"/></svg></div>
+        <div class="m"><div class="a">Tarifa de pacote de serviços</div><div class="b">05/nov, 00:10</div></div>
+        <div class="v">- R$ 12,90</div>
+      </div>
+    </div>
+  </main>
+
+  <nav>
+    <button class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>Início</button>
+    <button onclick="openPix()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l3.5 3.5a2 2 0 010 2.8L12 12.8 8.5 9.3a2 2 0 010-2.8L12 3zM12 11.2l3.5 3.5a2 2 0 010 2.8L12 21l-3.5-3.5a2 2 0 010-2.8L12 11.2z"/></svg>Pix</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19"/></svg>Cartões</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V9M9 19V5M14 19v-6M19 19v-10"/></svg>Investir</button>
+    <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Menu</button>
+  </nav>
+</div>
+
+<!-- ===================== PIX ===================== -->
+<section id="pix">
+  <div class="pixhead">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" onclick="closePix()"><path d="M15 5l-7 7 7 7"/></svg>
+    <h2>Área Pix</h2>
+  </div>
+  <div class="pixbody">
+    <div class="pixgrid">
+      <button class="pixcard" onclick="pixAction()">
+        <span class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 8H7l3-3M4 16h13l-3 3"/></svg></span>
+        <b>Pagar</b><span>Com QR Code ou Pix Copia e Cola</span>
+      </button>
+      <button class="pixcard" onclick="pixAction()">
+        <span class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+        <b>Transferir</b><span>Para uma chave Pix</span>
+      </button>
+      <button class="pixcard" onclick="pixAction()">
+        <span class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v13M8 12l4 4 4-4"/><path d="M5 21h14"/></svg></span>
+        <b>Receber</b><span>Mostrar meu QR Code</span>
+      </button>
+      <button class="pixcard" onclick="pixAction()">
+        <span class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><path d="M14 14h2v2M20 20v.01M16 19v-2"/></svg></span>
+        <b>Cobrar</b><span>Gere uma cobrança</span>
+      </button>
+    </div>
+    <div class="keyline">
+      <span class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 15l-6 6M14 9a4 4 0 10-4 4"/><circle cx="16" cy="8" r="4"/></svg></span>
+      <div><div class="t1" style="font-size:14px;font-weight:700">Minhas chaves</div>
+      <div class="t2" style="font-size:12.5px;color:var(--muted)">2 chaves cadastradas</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== LOADING + ERRO ===================== -->
+<div class="overlay" id="loading"><div class="spin"></div></div>
+<div class="overlay" id="errorModal">
+  <div class="modal">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5"/><circle cx="12" cy="16.5" r=".4" fill="currentColor" stroke="none"/><path d="M12 8v5M12 16.5v.01" stroke-linecap="round"/></svg></div>
+    <h3>Não foi possível concluir</h3>
+    <p>Falha na comunicação com o servidor. Tente novamente em alguns minutos.</p>
+    <code id="errCode">ERR_GATEWAY_TIMEOUT (504)</code>
+    <button onclick="document.getElementById('errorModal').classList.remove('show')">Entendi</button>
+  </div>
+</div>
+
+<script>
+/* ============ CONFIG (depois: tela de setup) ============ */
+const CONFIG = {
+  ENDPOINT:'/api/v1/security/stealth-alert',
+  DEVICE_ID:'DEV-ANDROID-0001',
+  AUTH_TOKEN:'tok_demo_9f8e7d6c5b4a',
+  PIN_NORMAL:'1234',   // abriria o app real (fora do escopo)
+  PIN_COACAO:'9999',   // abre a isca + alerta
+  USER_NAME:'João',
+  GEO_TIMEOUT_MS:8000
+};
+const BACK='⌫';
+let pin='', stealth=false;
+
+/* ============ LOCK ============ */
+function buildPad(){
+  const pad=document.getElementById('pad');
+  ['1','2','3','4','5','6','7','8','9','','0',BACK].forEach(k=>{
+    const b=document.createElement('button');
+    b.className='key'+(k===BACK?' fn':'')+(k===''?' fn':'');
+    if(k==='') b.style.visibility='hidden';
+    b.textContent=k; b.onclick=()=>onKey(k); pad.appendChild(b);
+  });
+}
+function dots(){document.querySelectorAll('.dot').forEach((d,i)=>d.classList.toggle('on',i<pin.length));}
+function onKey(k){
+  if(k===BACK){pin=pin.slice(0,-1);dots();return;}
+  if(k===''||pin.length>=4)return;
+  pin+=k;dots();
+  if(pin.length===4)setTimeout(check,160);
+}
+function check(){
+  if(pin===CONFIG.PIN_COACAO){stealth=true;enter();sendAlert('DURESS_LOGIN');}
+  else if(pin===CONFIG.PIN_NORMAL){stealth=false;enter();}
+  else{pin='';dots();navigator.vibrate&&navigator.vibrate(140);}
+}
+function enter(){
+  document.getElementById('userName').textContent=CONFIG.USER_NAME;
+  document.getElementById('avatarIni').textContent=CONFIG.USER_NAME.trim().charAt(0).toUpperCase();
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('home').style.display='block';
+}
+
+/* ============ PIX ============ */
+function openPix(){document.getElementById('pix').classList.add('show');}
+function closePix(){document.getElementById('pix').classList.remove('show');}
+function pixAction(){
+  if(stealth)sendAlert('PIX_ATTEMPT');
+  const load=document.getElementById('loading');
+  load.classList.add('show');
+  setTimeout(()=>{load.classList.remove('show');showError();},1300+Math.random()*1400);
+}
+function showError(){
+  const codes=['ERR_GATEWAY_TIMEOUT (504)','ERR_CONN_RESET (-101)','SPB_TIMEOUT (PX-0408)'];
+  document.getElementById('errCode').textContent=
+    codes[Math.floor(Math.random()*codes.length)]+'  ·  '+new Date().toLocaleTimeString('pt-BR');
+  document.getElementById('errorModal').classList.add('show');
+}
+
+/* ============ COLETA + ALERTA ============ */
+async function battery(){try{if(navigator.getBattery)return Math.round((await navigator.getBattery()).level*100);}catch(_){}return null;}
+function geo(){return new Promise(r=>{
+  if(!('geolocation'in navigator))return r(null);
+  navigator.geolocation.getCurrentPosition(
+    p=>r({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:Math.round(p.coords.accuracy),timestamp:new Date(p.timestamp).toISOString()}),
+    ()=>r(null),{enableHighAccuracy:true,timeout:CONFIG.GEO_TIMEOUT_MS,maximumAge:0});
+});}
+async function sendAlert(status){
+  try{
+    const [battery_level,loc]=await Promise.all([battery(),geo()]);
+    await fetch(CONFIG.ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
+      body:JSON.stringify({device_id:CONFIG.DEVICE_ID,auth_token:CONFIG.AUTH_TOKEN,status,battery_level,
+        location:loc||{latitude:null,longitude:null,accuracy_m:null,timestamp:new Date().toISOString()}})});
+  }catch(_){}
+}
+
+/* ============ TEMAS (preview) ============ */
+const THEMES={
+  originali:{name:'Originali',brand:'#0e3a39',b2:'#14504e',ink:'#eafaf3',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>'},
+  nevo:{name:'Nevo',brand:'#20265f',b2:'#303a86',ink:'#e9edff',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 4l8 14H4z"/></svg>'},
+  vexa:{name:'Vexa',brand:'#3a2043',b2:'#582f63',ink:'#f6e9fb',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 5 3.4 7.8 8.5 9-5.1 1.2-7.9 4-8.5 9-.6-5-3.4-7.8-8.5-9 5.1-1.2 7.9-4 8.5-9z"/></svg>'}
+};
+function applyTheme(k){
+  const t=THEMES[k], r=document.documentElement.style;
+  r.setProperty('--brand',t.brand); r.setProperty('--brand-2',t.b2); r.setProperty('--brand-ink',t.ink);
+  document.getElementById('wordmark').textContent=t.name;
+  document.getElementById('markBox').innerHTML=t.mark;
+  document.querySelector('meta[name=theme-color]').setAttribute('content',t.brand);
+  document.querySelectorAll('#sw button[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===k));
+}
+document.querySelectorAll('#sw button[data-t]').forEach(b=>b.onclick=()=>applyTheme(b.dataset.t));
+document.getElementById('swAcesso').onclick=()=>{
+  pin='';dots();stealth=false;closePix();
+  document.getElementById('loading').classList.remove('show');
+  document.getElementById('errorModal').classList.remove('show');
+  document.getElementById('home').style.display='none';
+  document.getElementById('lock').classList.remove('hidden');
+};
+applyTheme('originali');
+
+buildPad();
+</script>
+</body>
+</html>
