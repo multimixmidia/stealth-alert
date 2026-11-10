@@ -67,6 +67,11 @@ if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '10kb' }));
+// Nao deixa o navegador guardar as paginas HTML (evita servir versao antiga)
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 app.use(express.static(__dirname, { index: 'fake_bank.html' }));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
