@@ -208,6 +208,9 @@ async function processAlert(p) {
   });
   await fs.promises.appendFile(LOG_FILE, JSON.stringify(event) + '\n', 'utf8');
 
+  // Rastreio continuo (familia/empresa): so alimenta o painel, nao avisa contato
+  if (p.status === 'LOCATION_UPDATE') return;
+
   // Desarmado: so registra, nao avisa o contato
   if (state === 'SAFE') { console.log('[DESARMADO] alerta registrado sem envio'); return; }
 

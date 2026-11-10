@@ -1,0 +1,17 @@
+{
+  "name": "multimix-rastreio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "bundle": "esbuild src/main.js --bundle --format=iife --outfile=www/dist/main.js"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.0",
+    "esbuild": "0.24.2"
+  },
+  "dependencies": {
+    "@capacitor/core": "6.2.0",
+    "@capacitor/android": "6.2.0",
+    "@capacitor-community/background-geolocation": "1.2.24"
+  }
+}

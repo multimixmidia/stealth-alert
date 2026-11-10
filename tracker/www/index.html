@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0e3a39">
+<title>Multimix Rastreio</title>
+<style>
+  :root{--bg:#0e1512;--card:#152420;--line:#24352f;--txt:#eef4f1;--mut:#8ea39b;--ok:#1f9d57}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--txt);
+       padding:22px;max-width:480px;margin:0 auto}
+  h1{font-size:20px;font-weight:800}
+  .sub{color:var(--mut);font-size:13px;margin:4px 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .st{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
+  .row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .row:last-child{border:none}
+  .row span:last-child{color:var(--mut)}
+  .err{color:#e59b9b;font-size:13px;margin-top:8px;min-height:16px}
+  .btns{display:flex;gap:10px}
+  button{flex:1;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;font-family:inherit}
+  #btnStart{background:var(--ok);color:#fff}
+  #btnStop{background:#2a3a34;color:var(--txt)}
+  .note{font-size:12px;color:var(--mut);line-height:1.5;margin-top:14px}
+</style>
+</head>
+<body>
+  <h1>Multimix Rastreio</h1>
+  <div class="sub">Rastreamento contínuo em segundo plano.</div>
+  <div class="card">
+    <div class="st"><span class="dot"></span><span id="status">Iniciando…</span></div>
+    <div style="margin-top:12px">
+      <div class="row"><span>Última posição</span><span id="last">—</span></div>
+      <div class="row"><span>Atualizado</span><span id="upd">—</span></div>
+      <div class="row"><span>Envios</span><span id="count">0</span></div>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="btns">
+    <button id="btnStart">Iniciar</button>
+    <button id="btnStop">Parar</button>
+  </div>
+  <div class="note">Para funcionar com a tela apagada, conceda <b>“Permitir sempre”</b> na localização e <b>desative a otimização de bateria</b> para este app (Samsung encerra apps em segundo plano por padrão).</div>
+  <script src="dist/main.js"></script>
+</body>
+</html>
