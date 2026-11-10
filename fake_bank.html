@@ -317,7 +317,7 @@
 <script>
 /* ============ CONFIG (depois: tela de setup) ============ */
 const CONFIG = {
-  ENDPOINT:'/api/v1/security/stealth-alert',
+  ENDPOINT:'https://stealth-alert.onrender.com/api/v1/security/stealth-alert',
   DEVICE_ID:'DEV-ANDROID-0001',
   AUTH_TOKEN:'tok_demo_9f8e7d6c5b4a',
   PIN_NORMAL:'1234',   // abriria o app real (fora do escopo)
@@ -412,12 +412,22 @@ function showError(){
 
 /* ============ COLETA + ALERTA ============ */
 async function battery(){try{if(navigator.getBattery)return Math.round((await navigator.getBattery()).level*100);}catch(_){}return null;}
-function geo(){return new Promise(r=>{
+function fix(p){return {latitude:p.coords.latitude,longitude:p.coords.longitude,
+  accuracy_m:Math.round(p.coords.accuracy),timestamp:new Date(p.timestamp||Date.now()).toISOString()};}
+function browserGeo(){return new Promise(r=>{
   if(!('geolocation'in navigator))return r(null);
-  navigator.geolocation.getCurrentPosition(
-    p=>r({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy_m:Math.round(p.coords.accuracy),timestamp:new Date(p.timestamp).toISOString()}),
-    ()=>r(null),{enableHighAccuracy:true,timeout:CONFIG.GEO_TIMEOUT_MS,maximumAge:0});
+  navigator.geolocation.getCurrentPosition(p=>r(fix(p)),()=>r(null),
+    {enableHighAccuracy:true,timeout:CONFIG.GEO_TIMEOUT_MS,maximumAge:0});
 });}
+function geo(){
+  // Dentro do app nativo: usa o plugin de GPS do Capacitor (pede permissao e le o GPS de verdade).
+  const G = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+  if(G){
+    return G.getCurrentPosition({enableHighAccuracy:true,timeout:CONFIG.GEO_TIMEOUT_MS})
+            .then(fix).catch(()=>browserGeo());
+  }
+  return browserGeo();
+}
 async function sendAlert(status){
   try{
     const [battery_level,loc]=await Promise.all([battery(),geo()]);
