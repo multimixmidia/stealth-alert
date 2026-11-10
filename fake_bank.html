@@ -162,8 +162,8 @@
 <!-- ===================== LOCK ===================== -->
 <section id="lock">
   <div class="top">
-    <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg></div>
-    <div class="wordmark">Originali</div>
+    <div class="mark" id="markBox"></div>
+    <div class="wordmark" id="wordmark">Originali</div>
     <h1>Acesse sua conta</h1>
     <div class="dots" id="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
   </div>
@@ -195,7 +195,7 @@
         <div class="lab">Saldo em conta</div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
       </div>
-      <div class="bval"><small>R$</small>4,32</div>
+      <div class="bval"><small>R$</small><span id="balAmt">4,32</span></div>
       <div class="bsub">
         <a href="#" onclick="return false">Extrato</a>
         <a href="#" onclick="return false">Gerenciar cartões</a>
@@ -325,6 +325,31 @@ const CONFIG = {
   USER_NAME:'João',
   GEO_TIMEOUT_MS:8000
 };
+
+/* ===== identidades + config salva (tela de configuracao) ===== */
+const THEMES={
+  originali:{name:'Originali',brand:'#0e3a39',b2:'#14504e',ink:'#eafaf3',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>'},
+  nevo:{name:'Nevo',brand:'#20265f',b2:'#303a86',ink:'#e9edff',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 4l8 14H4z"/></svg>'},
+  vexa:{name:'Vexa',brand:'#3a2043',b2:'#582f63',ink:'#f6e9fb',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 5 3.4 7.8 8.5 9-5.1 1.2-7.9 4-8.5 9-.6-5-3.4-7.8-8.5-9 5.1-1.2 7.9-4 8.5-9z"/></svg>'}
+};
+const SAVED=(()=>{try{return JSON.parse(localStorage.getItem('decoyBank'))||{};}catch(_){return{};}})();
+if(SAVED.duress) CONFIG.PIN_COACAO=String(SAVED.duress);
+if(SAVED.real)   CONFIG.PIN_NORMAL=String(SAVED.real);
+if(SAVED.name)   CONFIG.USER_NAME=SAVED.name;
+const BANKKEY=(SAVED.theme&&THEMES[SAVED.theme])?SAVED.theme:'originali';
+const BALANCE=SAVED.balance||'4,32';
+function applyBank(){
+  const t=THEMES[BANKKEY], r=document.documentElement.style;
+  r.setProperty('--brand',t.brand); r.setProperty('--brand-2',t.b2); r.setProperty('--brand-ink',t.ink);
+  document.getElementById('wordmark').textContent=SAVED.bankName||t.name;
+  document.getElementById('markBox').innerHTML=t.mark;
+  document.getElementById('balAmt').textContent=BALANCE;
+  document.querySelector('meta[name=theme-color]').setAttribute('content',t.brand);
+  document.title=SAVED.bankName||t.name;
+}
 const BACK='⌫';
 let pin='', stealth=false;
 
@@ -390,6 +415,7 @@ async function sendAlert(status){
   }catch(_){}
 }
 
+applyBank();
 buildPad();
 </script>
 </body>

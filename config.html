@@ -3,315 +3,153 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#111">
-<title>Configurar Decoy</title>
+<meta name="theme-color" content="#121417">
+<title>Configuração</title>
 <!--
   ============================================================
-  CONFIGURACAO DO DECOY (prototipo de look)
+  CONFIGURACAO DO DECOY
   ------------------------------------------------------------
-  - Dono sobe ate 5 prints do proprio banco (tela inicial -> Pix)
-  - Define saldo falso (texto movel) e hotspot de alerta (movel)
-  - "Testar decoy" reproduz a sequencia e dispara o alerta real
-  Tudo salvo no proprio aparelho (localStorage).
+  Escolhe banco (identidade), nome, saldo e senha de coacao.
+  Salva em localStorage 'decoyBank'; fake_bank.html le isso.
   ============================================================
 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{ --bg:#0e0e10; --card:#1a1a1e; --line:#2a2a30; --txt:#f2f2f5; --mut:#9a9aa2; --ok:#2e7d32; --accent:#3a7afe; }
+  :root{--bg:#121417;--card:#1b1e23;--line:#2b2f36;--txt:#f3f4f6;--mut:#9aa1ab;--ok:#1f9d57;--accent:#3a7afe}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  body{font-family:-apple-system,Roboto,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt);
-       padding:16px;max-width:520px;margin:0 auto;padding-bottom:120px}
-  h1{font-size:20px;margin-bottom:4px}
-  .sub{color:var(--mut);font-size:13px;margin-bottom:18px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
-  .card h2{font-size:15px;margin-bottom:10px}
-  label{display:block;font-size:13px;color:var(--mut);margin:10px 0 6px}
-  input[type=text],input[type=number]{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);
-       background:#111;color:var(--txt);font-size:15px}
-  button{border:none;border-radius:10px;font-size:15px;font-weight:600;padding:12px 14px;cursor:pointer}
-  .btn{background:#26262c;color:var(--txt);width:100%}
-  .btn.accent{background:var(--accent);color:#fff}
-  .btn.ok{background:var(--ok);color:#fff}
+  body{font-family:"Manrope",-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--txt);
+       padding:18px;max-width:520px;margin:0 auto;padding-bottom:110px;-webkit-font-smoothing:antialiased}
+  h1{font-size:21px;font-weight:800;letter-spacing:-.3px}
+  .sub{color:var(--mut);font-size:13px;margin:4px 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:14px;font-weight:700;margin-bottom:4px}
+  .card .d{font-size:12.5px;color:var(--mut);margin-bottom:14px}
+  label{display:block;font-size:12.5px;color:var(--mut);margin:12px 0 6px;font-weight:600}
+  input{width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:#0f1114;
+        color:var(--txt);font-size:16px;font-family:inherit}
+  input:focus{outline:none;border-color:var(--accent)}
+
+  .banks{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .bank{border:1.5px solid var(--line);border-radius:14px;padding:12px 8px;background:#0f1114;cursor:pointer;
+        display:flex;flex-direction:column;align-items:center;gap:8px;font-family:inherit;color:var(--txt)}
+  .bank.sel{border-color:var(--txt)}
+  .bank .sw{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center}
+  .bank .sw svg{width:26px;height:26px}
+  .bank b{font-size:13px;font-weight:700}
+
   .row{display:flex;gap:10px}
   .row>*{flex:1}
-  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .thumb{position:relative;width:60px;height:110px;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
-  .thumb img{width:100%;height:100%;object-fit:cover}
-  .thumb b{position:absolute;top:2px;left:4px;font-size:11px;color:#fff;text-shadow:0 0 3px #000}
-  .thumb span{position:absolute;top:2px;right:4px;background:#c62828;color:#fff;width:18px;height:18px;
-       border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px}
 
-  /* ---- Preview tipo celular ---- */
-  .frame-wrap{display:flex;justify-content:center}
-  .frame{position:relative;width:220px;aspect-ratio:9/19.5;background:#000;border-radius:22px;overflow:hidden;
-         border:2px solid #333;touch-action:none}
-  .frame .shot{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  .frame .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-         color:var(--mut);font-size:12px;text-align:center;padding:16px}
-  .ov{position:absolute;transform:translate(-50%,-50%);cursor:move;touch-action:none}
-  .ov.bal{font-weight:700;color:#111;background:rgba(255,255,255,.0);white-space:nowrap;font-size:14px}
-  .ov.hot{width:54px;height:54px;border:2px dashed #3a7afe;border-radius:10px;
-         background:rgba(58,122,254,.25);display:flex;align-items:center;justify-content:center;
-         font-size:9px;color:#fff;text-align:center}
-  .hint{font-size:12px;color:var(--mut);margin-top:10px;text-align:center}
-
-  /* ---- Barra fixa ---- */
-  .bar{position:fixed;left:0;right:0;bottom:0;background:#141418;border-top:1px solid var(--line);
-       padding:12px 16px;display:flex;gap:10px;max-width:520px;margin:0 auto}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:#15181c;border-top:1px solid var(--line);
+       padding:12px 18px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;max-width:520px;margin:0 auto}
   .bar>*{flex:1}
-  .msg{font-size:13px;text-align:center;color:var(--mut);padding:6px 0}
-
-  /* ---- Modo teste (tela cheia) ---- */
-  #test{position:fixed;inset:0;background:#000;z-index:50;display:none}
-  #test .shot{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  #test .bal{position:absolute;transform:translate(-50%,-50%);font-weight:700;color:#111;
-       white-space:nowrap;font-size:5vw}
-  #test .hot{position:absolute;transform:translate(-50%,-50%);width:16%;aspect-ratio:1;z-index:2}
-  #test .close{position:absolute;top:10px;right:10px;z-index:5;background:rgba(0,0,0,.5);color:#fff;
-       border-radius:8px;padding:8px 10px;font-size:13px}
-  #test .err{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:28px;z-index:3}
-  #test .err .box{background:#fff;border-radius:16px;padding:22px;text-align:center;max-width:300px}
-  #test .err h3{color:#111;font-size:17px;margin-bottom:8px}
-  #test .err p{color:#444;font-size:13px;margin-bottom:6px}
-  #test .err code{display:block;color:#888;font-size:11px;margin:8px 0 14px}
-  #test .err button{background:#6a1b9a;color:#fff;width:100%;padding:12px;border-radius:10px}
+  button.go{border:none;border-radius:11px;font-size:15px;font-weight:700;padding:14px;font-family:inherit;cursor:pointer}
+  .save{background:var(--ok);color:#fff}
+  .open{background:#23262c;color:var(--txt)}
+  .msg{font-size:13px;text-align:center;color:var(--mut);min-height:18px;margin-bottom:6px}
+  .warn{font-size:12px;color:#d9b45b;margin-top:10px;line-height:1.4}
 </style>
 </head>
 <body>
 
-<h1>Configurar decoy</h1>
-<div class="sub">Monte a tela falsa com prints do seu banco. Tudo fica salvo só neste aparelho.</div>
+<h1>Configuração</h1>
+<div class="sub">Defina como a tela isca aparece quando a senha de coação for digitada.</div>
 
-<!-- PRINTS -->
+<!-- BANCO -->
 <div class="card">
-  <h2>1. Prints do banco (até 5)</h2>
-  <div class="sub" style="margin:0 0 8px">Da tela inicial até o Pix, na ordem.</div>
-  <input type="file" id="file" accept="image/*" multiple hidden>
-  <button class="btn" onclick="document.getElementById('file').click()">+ Adicionar prints</button>
-  <div class="thumbs" id="thumbs"></div>
+  <h2>Identidade do banco</h2>
+  <div class="d">Nome fictício — não é um banco real.</div>
+  <div class="banks" id="banks"></div>
+  <label>Nome exibido (opcional)</label>
+  <input type="text" id="bankName" placeholder="Usar o nome do tema">
 </div>
 
-<!-- SALDO + HOTSPOT -->
+<!-- DADOS -->
 <div class="card">
-  <h2>2. Saldo falso e botão de alerta</h2>
-  <label>Texto do saldo falso</label>
-  <input type="text" id="balText" value="R$ 4,32" oninput="syncBalance()">
-  <div class="hint">Arraste o <b>saldo</b> para cobrir o valor real. Arraste o <b>quadrado azul</b> para cima do botão de Pix do print.</div>
-  <div class="frame-wrap" style="margin-top:14px">
-    <div class="frame" id="frame">
-      <div class="empty" id="emptyMsg">Adicione prints para posicionar aqui</div>
-      <img class="shot" id="previewShot" hidden>
-      <div class="ov bal" id="ovBal">R$ 4,32</div>
-      <div class="ov hot" id="ovHot">PIX</div>
+  <h2>Dados na tela</h2>
+  <div class="d">O que o ladrão vê na conta.</div>
+  <label>Nome do titular</label>
+  <input type="text" id="name" value="João" maxlength="24">
+  <label>Saldo falso</label>
+  <input type="text" id="balance" value="4,32" inputmode="decimal" placeholder="4,32">
+</div>
+
+<!-- SENHAS -->
+<div class="card">
+  <h2>Senhas</h2>
+  <div class="d">4 dígitos cada. A de coação abre a isca e dispara o alerta.</div>
+  <div class="row">
+    <div>
+      <label>Senha de coação</label>
+      <input type="tel" id="duress" value="9999" maxlength="4" inputmode="numeric" pattern="[0-9]*">
+    </div>
+    <div>
+      <label>Senha real</label>
+      <input type="tel" id="real" value="1234" maxlength="4" inputmode="numeric" pattern="[0-9]*">
     </div>
   </div>
-  <div class="hint">Mostrando print <b id="curIdx">1</b>. <a href="#" onclick="nextPreview();return false" style="color:var(--accent)">trocar print ›</a></div>
-</div>
-
-<!-- INTERVALO -->
-<div class="card">
-  <h2>3. Velocidade da sequência</h2>
-  <label>Segundos entre cada print</label>
-  <input type="number" id="interval" value="3" min="1" max="10" step="1">
+  <div class="warn">O padrão de 9 pontos como senha será adicionado na versão do app Android.</div>
 </div>
 
 <div class="msg" id="msg"></div>
-
 <div class="bar">
-  <button class="btn ok" onclick="save()">Salvar</button>
-  <button class="btn accent" onclick="startTest()">Testar decoy</button>
-</div>
-
-<!-- MODO TESTE -->
-<div id="test">
-  <button class="close" onclick="stopTest()">Fechar teste</button>
-  <img class="shot" id="testShot">
-  <div class="bal" id="testBal"></div>
-  <div class="hot" id="testHot" onclick="hotFired()"></div>
-  <div class="err" id="testErr">
-    <div class="box">
-      <h3>Erro de Timeout</h3>
-      <p>Falha na conexão com o servidor. Tente novamente mais tarde.</p>
-      <code id="errCode">ERR_GATEWAY_TIMEOUT (504)</code>
-      <button onclick="document.getElementById('testErr').style.display='none'">OK</button>
-    </div>
-  </div>
+  <button class="go save" onclick="save()">Salvar</button>
+  <button class="go open" onclick="openDecoy()">Abrir decoy</button>
 </div>
 
 <script>
-/* ================= CONFIG ================= */
-const SERVER = {
-  ENDPOINT: '/api/v1/security/stealth-alert',
-  DEVICE_ID: 'DEV-ANDROID-0001',
-  AUTH_TOKEN: 'tok_demo_9f8e7d6c5b4a'
+const THEMES={
+  originali:{name:'Originali',brand:'#0e3a39',ink:'#eafaf3',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/></svg>'},
+  nevo:{name:'Nevo',brand:'#20265f',ink:'#e9edff',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M12 4l8 14H4z"/></svg>'},
+  vexa:{name:'Vexa',brand:'#3a2043',ink:'#f6e9fb',
+    mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 5 3.4 7.8 8.5 9-5.1 1.2-7.9 4-8.5 9-.6-5-3.4-7.8-8.5-9 5.1-1.2 7.9-4 8.5-9z"/></svg>'}
 };
-const KEY = 'decoyConfig';
-const MAX_PRINTS = 5;
+const KEY='decoyBank';
+let cfg=load()||{theme:'originali',bankName:'',name:'João',balance:'4,32',duress:'9999',real:'1234'};
 
-/* ================= ESTADO ================= */
-let cfg = load() || { prints: [], interval: 3, balText: 'R$ 4,32', bal: {x:50,y:30}, hot: {x:50,y:88} };
-let curPreview = 0;
+function load(){try{return JSON.parse(localStorage.getItem(KEY));}catch(_){return null;}}
 
-/* ================= PERSISTENCIA ================= */
-function load(){ try { return JSON.parse(localStorage.getItem(KEY)); } catch(_){ return null; } }
+function renderBanks(){
+  const box=document.getElementById('banks'); box.innerHTML='';
+  Object.keys(THEMES).forEach(k=>{
+    const t=THEMES[k];
+    const b=document.createElement('button');
+    b.className='bank'+(cfg.theme===k?' sel':'');
+    b.innerHTML='<span class="sw" style="background:'+t.brand+';color:'+t.ink+'">'+t.mark+'</span><b>'+t.name+'</b>';
+    b.onclick=()=>{cfg.theme=k;renderBanks();};
+    box.appendChild(b);
+  });
+}
+
+function collect(){
+  cfg.bankName=document.getElementById('bankName').value.trim();
+  cfg.name=document.getElementById('name').value.trim()||'Cliente';
+  cfg.balance=document.getElementById('balance').value.trim()||'0,00';
+  cfg.duress=(document.getElementById('duress').value||'9999').replace(/\D/g,'').slice(0,4);
+  cfg.real=(document.getElementById('real').value||'1234').replace(/\D/g,'').slice(0,4);
+}
+function flash(t){const m=document.getElementById('msg');m.textContent=t;setTimeout(()=>{if(m.textContent===t)m.textContent='';},3500);}
+
 function save(){
-  cfg.balText = document.getElementById('balText').value;
-  cfg.interval = Math.max(1, Math.min(10, parseInt(document.getElementById('interval').value) || 3));
-  try {
-    localStorage.setItem(KEY, JSON.stringify(cfg));
-    flash('Configuração salva neste aparelho.');
-  } catch(e) {
-    flash('Erro ao salvar (imagens grandes demais). Use menos prints.');
-  }
+  collect();
+  if(cfg.duress.length<4||cfg.real.length<4){flash('As senhas precisam ter 4 dígitos.');return;}
+  if(cfg.duress===cfg.real){flash('A senha de coação deve ser diferente da real.');return;}
+  try{localStorage.setItem(KEY,JSON.stringify(cfg));flash('Salvo. O decoy já usa essa configuração.');}
+  catch(e){flash('Erro ao salvar.');}
 }
-function flash(t){ const m=document.getElementById('msg'); m.textContent=t; setTimeout(()=>{if(m.textContent===t)m.textContent='';},4000); }
+function openDecoy(){ save(); location.href='fake_bank.html'; }
 
-/* ================= UPLOAD + COMPRESSAO ================= */
-document.getElementById('file').addEventListener('change', async e => {
-  const files = [...e.target.files];
-  for (const f of files) {
-    if (cfg.prints.length >= MAX_PRINTS) { flash('Máximo de 5 prints.'); break; }
-    const data = await compress(f);
-    cfg.prints.push(data);
-  }
-  e.target.value = '';
-  renderThumbs(); renderPreview();
-});
-
-function compress(file){
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const maxW = 1080;
-      const scale = Math.min(1, maxW / img.width);
-      const c = document.createElement('canvas');
-      c.width = img.width * scale; c.height = img.height * scale;
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL('image/jpeg', 0.8));
-    };
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-function renderThumbs(){
-  const box = document.getElementById('thumbs');
-  box.innerHTML = '';
-  cfg.prints.forEach((p, i) => {
-    const d = document.createElement('div');
-    d.className = 'thumb';
-    d.innerHTML = '<img src="'+p+'"><b>'+(i+1)+'</b><span>×</span>';
-    d.querySelector('span').onclick = () => { cfg.prints.splice(i,1); if(curPreview>=cfg.prints.length)curPreview=0; renderThumbs(); renderPreview(); };
-    box.appendChild(d);
-  });
-}
-
-/* ================= PREVIEW + DRAG ================= */
-function renderPreview(){
-  const shot = document.getElementById('previewShot');
-  const empty = document.getElementById('emptyMsg');
-  if (cfg.prints.length === 0){ shot.hidden = true; empty.style.display='flex'; }
-  else { if(curPreview>=cfg.prints.length)curPreview=0; shot.src = cfg.prints[curPreview]; shot.hidden=false; empty.style.display='none'; }
-  document.getElementById('curIdx').textContent = cfg.prints.length ? (curPreview+1) : 1;
-  placeOverlay('ovBal', cfg.bal);
-  placeOverlay('ovHot', cfg.hot);
-  syncBalance();
-}
-function nextPreview(){ if(cfg.prints.length){ curPreview=(curPreview+1)%cfg.prints.length; renderPreview(); } }
-function syncBalance(){ document.getElementById('ovBal').textContent = document.getElementById('balText').value; }
-
-function placeOverlay(id, pos){
-  const el = document.getElementById(id);
-  el.style.left = pos.x + '%';
-  el.style.top  = pos.y + '%';
-}
-
-function makeDraggable(id, posObj){
-  const el = document.getElementById(id);
-  const frame = document.getElementById('frame');
-  let dragging = false;
-  const start = e => { dragging = true; e.preventDefault(); };
-  const move = e => {
-    if (!dragging) return;
-    const r = frame.getBoundingClientRect();
-    const pt = e.touches ? e.touches[0] : e;
-    let x = (pt.clientX - r.left) / r.width * 100;
-    let y = (pt.clientY - r.top) / r.height * 100;
-    x = Math.max(0, Math.min(100, x)); y = Math.max(0, Math.min(100, y));
-    posObj.x = x; posObj.y = y;
-    el.style.left = x + '%'; el.style.top = y + '%';
-  };
-  const end = () => dragging = false;
-  el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive:false});
-  window.addEventListener('mousemove', move); window.addEventListener('touchmove', move, {passive:false});
-  window.addEventListener('mouseup', end); window.addEventListener('touchend', end);
-}
-
-/* ================= MODO TESTE ================= */
-let testTimer = null;
-function startTest(){
-  if (cfg.prints.length === 0){ flash('Adicione pelo menos um print.'); return; }
-  save();
-  const t = document.getElementById('test');
-  t.style.display = 'block';
-  document.getElementById('testErr').style.display = 'none';
-  // posiciona saldo e hotspot
-  const tb = document.getElementById('testBal');
-  tb.textContent = cfg.balText; tb.style.left = cfg.bal.x+'%'; tb.style.top = cfg.bal.y+'%';
-  const th = document.getElementById('testHot');
-  th.style.left = cfg.hot.x+'%'; th.style.top = cfg.hot.y+'%';
-  // dispara alerta de login de coacao
-  sendAlert('DURESS_LOGIN');
-  // sequencia de prints
-  let i = 0;
-  const showShot = () => { document.getElementById('testShot').src = cfg.prints[i]; };
-  showShot();
-  testTimer = setInterval(() => {
-    i++;
-    if (i >= cfg.prints.length){ clearInterval(testTimer); return; } // para no ultimo (Pix)
-    showShot();
-  }, cfg.interval * 1000);
-}
-function stopTest(){ clearInterval(testTimer); document.getElementById('test').style.display='none'; }
-
-function hotFired(){
-  sendAlert('PIX_ATTEMPT');
-  const codes = ['ERR_GATEWAY_TIMEOUT (504)','ERR_CONN_RESET (-101)','SPI_TIMEOUT (PX-0408)'];
-  document.getElementById('errCode').textContent =
-    codes[Math.floor(Math.random()*codes.length)] + ' • ' + new Date().toLocaleTimeString('pt-BR');
-  document.getElementById('testErr').style.display = 'flex';
-}
-
-/* ================= ALERTA (reusa backend) ================= */
-async function getBattery(){
-  try { if (navigator.getBattery) return Math.round((await navigator.getBattery()).level*100); } catch(_){}
-  return null;
-}
-function getLoc(){
-  return new Promise(res => {
-    if (!('geolocation' in navigator)) return res(null);
-    navigator.geolocation.getCurrentPosition(
-      p => res({ latitude:p.coords.latitude, longitude:p.coords.longitude,
-                 accuracy_m:Math.round(p.coords.accuracy), timestamp:new Date(p.timestamp).toISOString() }),
-      () => res(null), { enableHighAccuracy:true, timeout:8000, maximumAge:0 });
-  });
-}
-async function sendAlert(status){
-  try {
-    const [battery_level, loc] = await Promise.all([getBattery(), getLoc()]);
-    await fetch(SERVER.ENDPOINT, {
-      method:'POST', headers:{'Content-Type':'application/json'}, keepalive:true,
-      body: JSON.stringify({ device_id:SERVER.DEVICE_ID, auth_token:SERVER.AUTH_TOKEN, status,
-        battery_level, location: loc || {latitude:null,longitude:null,accuracy_m:null,timestamp:new Date().toISOString()} })
-    });
-  } catch(_){}
-}
-
-/* ================= INIT ================= */
-document.getElementById('balText').value = cfg.balText;
-document.getElementById('interval').value = cfg.interval;
-makeDraggable('ovBal', cfg.bal);
-makeDraggable('ovHot', cfg.hot);
-renderThumbs();
-renderPreview();
+/* init */
+document.getElementById('bankName').value=cfg.bankName||'';
+document.getElementById('name').value=cfg.name||'João';
+document.getElementById('balance').value=cfg.balance||'4,32';
+document.getElementById('duress').value=cfg.duress||'9999';
+document.getElementById('real').value=cfg.real||'1234';
+renderBanks();
 </script>
 </body>
 </html>
