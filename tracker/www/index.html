@@ -4,6 +4,107 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e3a39">
+<title>Multimix</title>
+<style>
+  :root{--bg:#0e1512;--card:#152420;--line:#24352f;--txt:#eef4f1;--mut:#8ea39b;--ok:#1f9d57;--accent:#2f6f63}
+  *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
+  html,body{height:100%}
+  body{font-family:-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--txt);
+       display:flex;flex-direction:column;max-width:480px;margin:0 auto}
+  header{padding:18px 22px 8px}
+  h1{font-size:20px;font-weight:800}
+  main{flex:1;overflow:auto;padding:8px 22px 90px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  label{display:block;font-size:13px;color:var(--mut);margin-bottom:6px;font-weight:600}
+  input{width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:#0b100e;color:var(--txt);font-size:16px;font-family:inherit;margin-bottom:10px}
+  .st{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
+  .row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .row:last-child{border:none}
+  .row span:last-child{color:var(--mut)}
+  .err{color:#e59b9b;font-size:13px;margin-top:8px;min-height:16px}
+  .note{font-size:12px;color:var(--mut);line-height:1.5;margin-top:12px}
+  .me{font-size:13px;color:var(--mut);margin-bottom:6px}
+  .me b{color:var(--txt)}
+  button,.btn{display:block;width:100%;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;font-family:inherit;text-align:center;text-decoration:none;cursor:pointer}
+  .green{background:var(--ok);color:#fff}
+  .grey{background:#223029;color:var(--txt)}
+  iframe{width:100%;height:calc(100vh - 150px);border:0;border-radius:14px;background:var(--card)}
+  nav{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;display:flex;
+      background:#0b100e;border-top:1px solid var(--line)}
+  nav button{flex:1;background:none;color:var(--mut);font-size:12px;padding:12px 4px;border-radius:0;font-weight:600}
+  nav button.active{color:var(--txt);box-shadow:inset 0 3px 0 var(--ok)}
+</style>
+</head>
+<body>
+  <header><h1>Multimix</h1></header>
+
+  <main>
+    <!-- ABA 1: CADASTRO -->
+    <section id="tab-cadastro" class="tab" hidden>
+      <div id="setup" class="card" hidden>
+        <label>Seu nome (aparece para a família)</label>
+        <input id="nome" type="text" maxlength="40" placeholder="Ex.: João">
+        <button class="green" id="btnEntrar">Entrar</button>
+        <div class="err" id="setupErr"></div>
+      </div>
+      <div id="cadastrado" class="card" hidden>
+        <div class="me">Cadastrado como <b id="who">—</b></div>
+        <label style="margin-top:12px">Trocar nome</label>
+        <input id="novoNome" type="text" maxlength="40">
+        <button class="grey" id="btnRenomear">Salvar nome</button>
+        <div class="err" id="cadMsg"></div>
+      </div>
+      <div class="note">O cadastro é automático: depois de informar o nome, o aparelho se registra e começa a enviar a localização sozinho.</div>
+    </section>
+
+    <!-- ABA 2: MINHA POSIÇÃO -->
+    <section id="tab-posicao" class="tab" hidden>
+      <div class="card">
+        <div class="st"><span class="dot"></span><span id="status">Iniciando…</span></div>
+        <div style="margin-top:12px">
+          <div class="row"><span>Última posição</span><span id="last">—</span></div>
+          <div class="row"><span>Atualizado</span><span id="upd">—</span></div>
+          <div class="row"><span>Envios</span><span id="count">0</span></div>
+        </div>
+        <div class="err" id="err"></div>
+      </div>
+      <div class="note">Para funcionar com a tela apagada: localização <b>"Permitir o tempo todo"</b> e bateria <b>"Sem restrições"</b> para este app.</div>
+    </section>
+
+    <!-- ABA 3: MAPA DA FAMÍLIA -->
+    <section id="tab-familia" class="tab" hidden>
+      <iframe id="frameFamilia" title="Mapa da família"></iframe>
+    </section>
+
+    <!-- ABA 4: ANTIFURTO (download) -->
+    <section id="tab-antifurto" class="tab" hidden>
+      <div class="card">
+        <div class="st">Antifurto (Originali)</div>
+        <p class="note" style="margin:10px 0 14px">Baixe e instale o app do antifurto. Ele é um app separado, com senha de coação e alerta silencioso.</p>
+        <a class="btn green" id="linkAntifurto" href="#" target="_blank" rel="noopener">Baixar APK do antifurto</a>
+      </div>
+      <div class="note">Se o Android pedir, permita a instalação de apps de fontes desconhecidas.</div>
+    </section>
+  </main>
+
+  <nav>
+    <button data-tab="cadastro" class="active">Cadastro</button>
+    <button data-tab="posicao">Minha posição</button>
+    <button data-tab="familia">Família</button>
+    <button data-tab="antifurto">Antifurto</button>
+  </nav>
+
+  <script src="dist/main.js"></script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0e3a39">
 <title>Multimix Rastreio</title>
 <style>
   :root{--bg:#0e1512;--card:#152420;--line:#24352f;--txt:#eef4f1;--mut:#8ea39b;--ok:#1f9d57;--accent:#2f6f63}
