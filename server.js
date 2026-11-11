@@ -186,7 +186,21 @@ document.getElementById('go').onclick = async () => {
 
 /* Rota de verificacao de versao (para confirmar deploy) */
 app.get('/version', (req, res) => {
-  res.json({ version: 'v4-supabase', db: DB, deployed_at: new Date().toISOString() });
+  res.json({ version: 'v5-db-robusto', db_configurado: DB, db_funcionando: dbReady, deployed_at: new Date().toISOString() });
+});
+
+/* Diagnostico do banco: mostra o erro exato do Supabase */
+app.get('/dbcheck', async (req, res) => {
+  if (!DB) return res.json({ db: false, msg: 'SUPABASE_URL/KEY nao configuradas' });
+  const out = { db: true, url: SUPABASE_URL };
+  try { out.members_count = (await sb('members?select=device_id')).length; } catch (e) { out.members_error = e.message; }
+  try { out.positions_count = (await sb('positions?select=id&limit=1')).length; } catch (e) { out.positions_error = e.message; }
+  try {
+    await sb('positions', { method: 'POST', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ device_id: 'DBCHECK', lat: 0, lng: 0, acc: 0, battery: 0, status: 'LOCATION_UPDATE', ts: new Date().toISOString() }) });
+    out.insert = 'ok';
+  } catch (e) { out.insert_error = e.message; }
+  res.json(out);
 });
 
 /* ============================================================
@@ -294,60 +308,76 @@ async function sb(pathq, opts = {}) {
   return txt ? JSON.parse(txt) : null;
 }
 
+// Autoteste do banco no start: so usa o Supabase se gravar E ler de verdade.
+let dbReady = false;
+async function dbSelfTest() {
+  if (!DB) { console.log('[DB] sem Supabase -> memoria'); return; }
+  try {
+    await sb('positions', { method: 'POST', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ device_id: 'SELFTEST', lat: 0, lng: 0, acc: 0, battery: 0, status: 'LOCATION_UPDATE', ts: new Date().toISOString() }) });
+    await sb('members', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ device_id: 'SELFTEST', account: 'selftest', name: 'selftest' }) });
+    await sb('positions?device_id=eq.SELFTEST', { method: 'DELETE' }).catch(() => {});
+    await sb('members?device_id=eq.SELFTEST', { method: 'DELETE' }).catch(() => {});
+    dbReady = true;
+    console.log('[DB] Supabase OK (grava e le)');
+  } catch (e) {
+    dbReady = false;
+    console.error('[DB] Supabase FALHOU -> usando memoria. Motivo: ' + e.message);
+  }
+}
+
+// Grava SEMPRE na memoria (cache/fallback) e tambem no banco quando disponivel.
 async function pushFix(id, fix) {
-  if (DB) {
+  if (!tracks.has(id)) tracks.set(id, []);
+  const arr = tracks.get(id); arr.push(fix);
+  if (arr.length > MAX_FIXES) arr.splice(0, arr.length - MAX_FIXES);
+  if (dbReady) {
     try {
-      await sb('positions', {
-        method: 'POST', headers: { Prefer: 'return=minimal' },
+      await sb('positions', { method: 'POST', headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({ device_id: id, lat: fix.lat, lng: fix.lng, acc: fix.acc,
-                               battery: fix.battery, status: fix.status, ts: fix.ts })
-      });
-      return;
+                               battery: fix.battery, status: fix.status, ts: fix.ts }) });
     } catch (e) { console.error('[DB pushFix]', e.message); }
   }
-  if (!tracks.has(id)) tracks.set(id, []);
-  const arr = tracks.get(id);
-  arr.push(fix);
-  if (arr.length > MAX_FIXES) arr.splice(0, arr.length - MAX_FIXES);
 }
 
 async function getFixes(id) {
-  if (DB) {
+  if (dbReady) {
     try {
       const rows = await sb('positions?device_id=eq.' + encodeURIComponent(id) +
         '&select=lat,lng,acc,battery,status,ts&order=created_at.desc&limit=200');
-      return (rows || []).reverse().map(r => ({ lat: r.lat, lng: r.lng, acc: r.acc, battery: r.battery, status: r.status, ts: r.ts }));
-    } catch (e) { console.error('[DB getFixes]', e.message); return []; }
+      const list = (rows || []).reverse().map(r => ({ lat: r.lat, lng: r.lng, acc: r.acc, battery: r.battery, status: r.status, ts: r.ts }));
+      if (list.length) return list;
+    } catch (e) { console.error('[DB getFixes]', e.message); }
   }
   return tracks.get(id) || [];
 }
 
 async function registerMember(account, device_id, name) {
   const nm = (name || device_id).slice(0, 40);
-  if (DB) {
-    try {
-      await sb('members', {
-        method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify({ device_id, account, name: nm, updated_at: new Date().toISOString() })
-      });
-      return;
-    } catch (e) { console.error('[DB register]', e.message); }
-  }
   if (!members.has(account)) members.set(account, new Map());
   members.get(account).set(device_id, { name: nm });
+  if (dbReady) {
+    try {
+      await sb('members', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ device_id, account, name: nm, updated_at: new Date().toISOString() }) });
+    } catch (e) { console.error('[DB register]', e.message); }
+  }
 }
 
 async function getMembers(account) {
-  if (DB) {
+  if (dbReady) {
     try {
       const rows = await sb('members?account=eq.' + encodeURIComponent(account) + '&select=device_id,name');
-      const list = [];
-      for (const m of (rows || [])) {
-        const fixes = await getFixes(m.device_id);
-        list.push({ id: m.device_id, name: m.name, last: fixes.length ? fixes[fixes.length - 1] : null, fixes });
+      if (rows && rows.length) {
+        const list = [];
+        for (const m of rows) {
+          const fixes = await getFixes(m.device_id);
+          list.push({ id: m.device_id, name: m.name, last: fixes.length ? fixes[fixes.length - 1] : null, fixes });
+        }
+        return list;
       }
-      return list;
-    } catch (e) { console.error('[DB members]', e.message); return []; }
+    } catch (e) { console.error('[DB members]', e.message); }
   }
   const mm = members.get(account) || new Map();
   return [...mm.entries()].map(([id, info]) => {
@@ -431,7 +461,7 @@ async function sendWhatsApp(c, text) {
    ============================================================ */
 app.listen(PORT, () => {
   console.log('Servidor ativo na porta ' + PORT);
-  console.log('Banco: ' + (DB ? 'Supabase ON' : 'memoria (sem DB)') +
-              ' | Telegram: ' + (TELEGRAM_BOT_TOKEN ? 'ON' : 'OFF') +
+  console.log('Telegram: ' + (TELEGRAM_BOT_TOKEN ? 'ON' : 'OFF') +
               ' | WhatsApp: ' + (process.env.CALLMEBOT_APIKEY ? 'ON' : 'OFF'));
+  dbSelfTest();
 });
