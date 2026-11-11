@@ -42,7 +42,9 @@ const MAX_FIXES = 300;
 
 // device_id -> token (producao: banco de dados + hash)
 const DEVICE_TOKENS = { 'DEV-ANDROID-0001': 'tok_demo_9f8e7d6c5b4a' };
-const SHARED_TOKEN = process.env.SHARED_TOKEN || 'tok_demo_9f8e7d6c5b4a'; // prototipo: token unico p/ membros
+// Segredo para gerar o token de cada aparelho. Defina TOKEN_SECRET no Render.
+const TOKEN_SECRET = process.env.TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.TOKEN_SECRET) console.warn('[AVISO] TOKEN_SECRET nao definido: tokens mudam a cada reinicio');
 
 // device_id -> contato de emergencia (dados vem das variaveis de ambiente)
 const EMERGENCY_CONTACTS = {
@@ -91,10 +93,15 @@ function safeEqual(a, b) {
   const A = Buffer.from(String(a)), B = Buffer.from(String(b));
   return A.length === B.length && crypto.timingSafeEqual(A, B);
 }
+// Token exclusivo de cada aparelho (HMAC do device_id com o segredo do servidor)
+function issueToken(id) {
+  return crypto.createHmac('sha256', TOKEN_SECRET).update(String(id)).digest('hex');
+}
 function isValidToken(id, tok) {
-  if (typeof tok === 'string' && safeEqual(SHARED_TOKEN, tok)) return true; // token compartilhado
-  const exp = DEVICE_TOKENS[id];
-  return Boolean(exp) && safeEqual(exp, tok);
+  if (typeof tok !== 'string' || !tok) return false;
+  if (safeEqual(issueToken(id), tok)) return true;   // aparelho do rastreio familia
+  const legado = DEVICE_TOKENS[id];                  // antifurto (DEV-ANDROID-0001)
+  return Boolean(legado) && safeEqual(legado, tok);
 }
 function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
 
@@ -220,13 +227,28 @@ const members = new Map();     // account -> Map(id -> { name })
 const locateReq = new Set();   // device_ids que pediram posicao agora
 
 // Cadastra/atualiza um membro de uma conta
+// Cadastra o membro e devolve o token do aparelho.
+// Se o aparelho ja existe, exige o token atual (impede sequestro de cadastro).
 app.post('/api/v1/register', async (req, res) => {
-  const { account, device_id, name } = req.body || {};
+  const { account, device_id, name, auth_token } = req.body || {};
   if (!account || !device_id) return res.status(400).json({ ok: false });
+  if (await memberExists(device_id) && !isValidToken(device_id, auth_token))
+    return res.status(401).json({ ok: false, msg: 'Token invalido para este aparelho' });
   await registerMember(account, device_id, name);
   console.log('[MEMBRO] ' + account + ' <- ' + device_id + ' (' + name + ')');
-  res.json({ ok: true });
+  res.json({ ok: true, token: issueToken(device_id) });
 });
+
+async function memberExists(id) {
+  if (dbReady) {
+    try {
+      const rows = await sb('members?device_id=eq.' + encodeURIComponent(id) + '&select=device_id');
+      if (rows && rows.length) return true;
+    } catch (_) {}
+  }
+  for (const mm of members.values()) if (mm.has(id)) return true;
+  return false;
+}
 
 // Lista membros + ultima posicao de cada um
 app.get('/api/v1/members', async (req, res) => {
