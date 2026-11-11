@@ -32,7 +32,7 @@ const LOG_FILE = path.join(LOG_DIR, 'stealth-alerts.jsonl');
 const DISARM_PIN = process.env.DISARM_PIN || '4321';
 const BASE_URL   = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || ('http://localhost:' + PORT)).replace(/\/$/, '');
 const TRACK_KEY  = process.env.TRACK_KEY || null;   // opcional: protege o link de acompanhamento
-const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
 const DB = Boolean(SUPABASE_URL && SUPABASE_KEY); // persistencia no Supabase quando configurado
 
