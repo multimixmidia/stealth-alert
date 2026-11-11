@@ -4,34 +4,40 @@ const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 
 const BASE = 'https://stealth-alert.onrender.com';
 const ENDPOINT = BASE + '/api/v1/security/stealth-alert';
-const AUTH_TOKEN = 'tok_demo_9f8e7d6c5b4a';
 const ACCOUNT = 'familia';
+const ANTIFURTO_APK = 'https://github.com/multimixmidia/stealth-alert/releases/download/app-latest/app-debug.apk';
 const $ = id => document.getElementById(id);
 
 let member = loadMember();
-let count = 0, watcherId = null, lastLoc = null;
+let count = 0, watcherId = null, lastLoc = null, started = false;
 
 function loadMember(){ try { return JSON.parse(localStorage.getItem('member')); } catch(_){ return null; } }
 function saveMember(m){ try { localStorage.setItem('member', JSON.stringify(m)); } catch(_){} }
 
+/* ---------- Cadastro automatico ----------
+   Registra no servidor e guarda o token DO APARELHO devolvido pelo servidor. */
 async function register(){
-  try {
-    await fetch(BASE + '/api/v1/register', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ account: ACCOUNT, device_id: member.id, name: member.name })
-    });
-  } catch(_){}
+  const r = await fetch(BASE + '/api/v1/register', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ account: ACCOUNT, device_id: member.id, name: member.name, auth_token: member.token || null })
+  });
+  if (r.status === 401) throw new Error('Servidor recusou o cadastro deste aparelho');
+  if (!r.ok) throw new Error('Cadastro falhou (HTTP ' + r.status + ')');
+  const d = await r.json();
+  if (d.token) { member.token = d.token; saveMember(member); }
 }
+async function ensureRegistered(){ if (!member.token) await register(); }
 
 async function battery(){ try { if (navigator.getBattery) return Math.round((await navigator.getBattery()).level*100); } catch(_){} return null; }
 
 async function send(loc){
   try {
+    await ensureRegistered();
     const bat = await battery();
-    await fetch(ENDPOINT, {
+    const r = await fetch(ENDPOINT, {
       method:'POST', headers:{'Content-Type':'application/json'}, keepalive:true,
       body: JSON.stringify({
-        device_id: member.id, auth_token: AUTH_TOKEN, status:'LOCATION_UPDATE', battery_level: bat,
+        device_id: member.id, auth_token: member.token, status:'LOCATION_UPDATE', battery_level: bat,
         location: {
           latitude: loc.latitude, longitude: loc.longitude,
           accuracy_m: Math.round(loc.accuracy || 0),
@@ -39,6 +45,7 @@ async function send(loc){
         }
       })
     });
+    if (!r.ok) throw new Error('servidor HTTP ' + r.status);
     count++;
     $('count').textContent = count;
     $('last').textContent = loc.latitude.toFixed(5) + ', ' + loc.longitude.toFixed(5);
@@ -56,36 +63,40 @@ async function freshFix(){
   } catch(_){ return null; }
 }
 
-async function start(){
-  if (watcherId) return;
-  $('status').textContent = 'Iniciando…';
-  await register();
-  // posicao imediata ao iniciar (nao espera movimento)
-  const first = await freshFix();
+/* ---------- Rastreio: inicia sozinho, sem botoes ---------- */
+async function startTracking(){
+  if (started || !member) return;
+  started = true;
+  $('status').textContent = 'Iniciando...';
+  try { await ensureRegistered(); } catch(e){ $('err').textContent = e.message; }
+
+  const first = await freshFix();   // posicao imediata
   if (first) send(first);
+
   try {
     watcherId = await BackgroundGeolocation.addWatcher({
-      backgroundMessage: 'Rastreamento ativo', backgroundTitle: 'Multimix Rastreio',
+      backgroundMessage: 'Rastreamento ativo', backgroundTitle: 'Multimix',
       requestPermissions: true, stale: false, distanceFilter: 20
     }, (location, error) => {
       if (error){
-        if (error.code === 'NOT_AUTHORIZED') $('err').textContent = 'Permissão negada. Ative "Permitir sempre".';
+        if (error.code === 'NOT_AUTHORIZED') $('err').textContent = 'Permissao negada. Ative "Permitir o tempo todo".';
         $('status').textContent = 'Erro: ' + error.code; return;
       }
       $('status').textContent = 'Rastreando em segundo plano';
       if (location){ lastLoc = location; send(location); }
     });
-    pollLocate();
-  } catch(e){ $('status').textContent = 'Falha ao iniciar'; $('err').textContent = e.message; }
+  } catch(e){
+    started = false;
+    $('status').textContent = 'Falha ao iniciar';
+    $('err').textContent = e.message;
+    return;
+  }
+  pollLocate();
 }
 
-async function stop(){
-  if (watcherId){ await BackgroundGeolocation.removeWatcher({ id: watcherId }); watcherId = null; }
-  $('status').textContent = 'Parado';
-}
-
-// Responde ao "Localizar agora" do painel
+// Responde ao "Localizar agora" do painel da familia
 async function pollLocate(){
+  if (!member) return;
   try {
     const r = await fetch(BASE + '/api/v1/locate-check?id=' + encodeURIComponent(member.id), { cache:'no-store' });
     const d = await r.json();
@@ -97,25 +108,56 @@ async function pollLocate(){
   setTimeout(pollLocate, 8000);
 }
 
-/* ---------- UI: setup vs status ---------- */
-function showStatus(){
-  $('setup').style.display = 'none';
-  $('panel').style.display = 'block';
-  $('who').textContent = member.name;
-  $('btnStart').onclick = start;
-  $('btnStop').onclick = stop;
-  start();
+/* ---------- Abas ---------- */
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(s => s.hidden = s.id !== 'tab-' + name);
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  if (name === 'familia' && !$('frameFamilia').src)
+    $('frameFamilia').src = BASE + '/familia.html?account=' + ACCOUNT;
 }
+
 function showSetup(){
-  $('setup').style.display = 'block';
-  $('panel').style.display = 'none';
+  $('setup').hidden = false;
+  $('cadastrado').hidden = true;
+}
+function showCadastrado(){
+  $('setup').hidden = true;
+  $('cadastrado').hidden = false;
+  $('who').textContent = member.name;
+  $('novoNome').value = member.name;
+}
+
+/* ---------- Inicio ---------- */
+function init(){
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+  $('linkAntifurto').href = ANTIFURTO_APK;
+
   $('btnEntrar').onclick = () => {
     const name = ($('nome').value || '').trim();
     if (!name){ $('setupErr').textContent = 'Digite seu nome.'; return; }
-    member = { id: 'FAM-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), name, account: ACCOUNT };
+    member = { id: 'FAM-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), name, account: ACCOUNT, token: null };
     saveMember(member);
-    showStatus();
+    showCadastrado();
+    showTab('posicao');
+    startTracking();
   };
-}
 
-if (member && member.id) showStatus(); else showSetup();
+  $('btnRenomear').onclick = async () => {
+    const name = ($('novoNome').value || '').trim();
+    if (!name){ $('cadMsg').textContent = 'Digite um nome.'; return; }
+    member.name = name; saveMember(member);
+    $('who').textContent = name;
+    try { await register(); $('cadMsg').textContent = 'Nome atualizado.'; }
+    catch(e){ $('cadMsg').textContent = e.message; }
+  };
+
+  if (member && member.id){
+    showCadastrado();
+    showTab('posicao');
+    startTracking();          // sem Parar/Iniciar: ja comeca ao abrir
+  } else {
+    showSetup();
+    showTab('cadastro');
+  }
+}
+init();
