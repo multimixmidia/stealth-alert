@@ -32,6 +32,9 @@ const LOG_FILE = path.join(LOG_DIR, 'stealth-alerts.jsonl');
 const DISARM_PIN = process.env.DISARM_PIN || '4321';
 const BASE_URL   = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || ('http://localhost:' + PORT)).replace(/\/$/, '');
 const TRACK_KEY  = process.env.TRACK_KEY || null;   // opcional: protege o link de acompanhamento
+const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
+const DB = Boolean(SUPABASE_URL && SUPABASE_KEY); // persistencia no Supabase quando configurado
 
 // device_id -> trilha de posicoes em memoria (ultimas N)
 const tracks = new Map();
@@ -183,16 +186,17 @@ document.getElementById('go').onclick = async () => {
 
 /* Rota de verificacao de versao (para confirmar deploy) */
 app.get('/version', (req, res) => {
-  res.json({ version: 'v3-location-skip', deployed_at: new Date().toISOString() });
+  res.json({ version: 'v4-supabase', db: DB, deployed_at: new Date().toISOString() });
 });
 
 /* ============================================================
    ENDPOINT: TRILHA (pagina de acompanhamento ao vivo)
    ============================================================ */
-app.get('/api/v1/track', (req, res) => {
+app.get('/api/v1/track', async (req, res) => {
   const id = req.query.id;
   if (TRACK_KEY && req.query.k !== TRACK_KEY) return res.status(401).json({ ok: false });
-  res.json({ ok: true, device_id: id, state: deviceState.get(id) || 'ALERT', fixes: tracks.get(id) || [] });
+  const fixes = await getFixes(id);
+  res.json({ ok: true, device_id: id, state: deviceState.get(id) || 'ALERT', fixes });
 });
 
 /* ============================================================
@@ -202,23 +206,18 @@ const members = new Map();     // account -> Map(id -> { name })
 const locateReq = new Set();   // device_ids que pediram posicao agora
 
 // Cadastra/atualiza um membro de uma conta
-app.post('/api/v1/register', (req, res) => {
+app.post('/api/v1/register', async (req, res) => {
   const { account, device_id, name } = req.body || {};
   if (!account || !device_id) return res.status(400).json({ ok: false });
-  if (!members.has(account)) members.set(account, new Map());
-  members.get(account).set(device_id, { name: (name || device_id).slice(0, 40) });
+  await registerMember(account, device_id, name);
   console.log('[MEMBRO] ' + account + ' <- ' + device_id + ' (' + name + ')');
   res.json({ ok: true });
 });
 
 // Lista membros + ultima posicao de cada um
-app.get('/api/v1/members', (req, res) => {
+app.get('/api/v1/members', async (req, res) => {
   const account = req.query.account;
-  const m = members.get(account) || new Map();
-  const list = [...m.entries()].map(([id, info]) => {
-    const fixes = tracks.get(id) || [];
-    return { id, name: info.name, last: fixes.length ? fixes[fixes.length - 1] : null, fixes };
-  });
+  const list = await getMembers(account);
   res.json({ ok: true, account, members: list });
 });
 
@@ -256,12 +255,12 @@ async function processAlert(p) {
     maps_link: buildMapsLink(p.location)
   };
   logToConsole(event);
-  pushFix(p.device_id, {
+  await pushFix(p.device_id, {
     lat: p.location.latitude, lng: p.location.longitude,
     acc: p.location.accuracy_m ?? null, battery: p.battery_level,
     ts: event.received_at, status: p.status, state
   });
-  await fs.promises.appendFile(LOG_FILE, JSON.stringify(event) + '\n', 'utf8');
+  await fs.promises.appendFile(LOG_FILE, JSON.stringify(event) + '\n', 'utf8').catch(() => {});
 
   // Rastreio continuo (familia/empresa): so alimenta o painel, nao avisa contato
   if (p.status === 'LOCATION_UPDATE') return;
@@ -279,11 +278,82 @@ function buildMapsLink(loc) {
   return 'https://www.google.com/maps?q=' + loc.latitude + ',' + loc.longitude;
 }
 
-function pushFix(id, fix) {
+/* ---- Supabase (PostgREST via fetch); cai para memoria se falhar ---- */
+async function sb(pathq, opts = {}) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/' + pathq, {
+    ...opts,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...(opts.headers || {})
+    }
+  });
+  if (!r.ok) throw new Error('supabase ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+async function pushFix(id, fix) {
+  if (DB) {
+    try {
+      await sb('positions', {
+        method: 'POST', headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ device_id: id, lat: fix.lat, lng: fix.lng, acc: fix.acc,
+                               battery: fix.battery, status: fix.status, ts: fix.ts })
+      });
+      return;
+    } catch (e) { console.error('[DB pushFix]', e.message); }
+  }
   if (!tracks.has(id)) tracks.set(id, []);
   const arr = tracks.get(id);
   arr.push(fix);
   if (arr.length > MAX_FIXES) arr.splice(0, arr.length - MAX_FIXES);
+}
+
+async function getFixes(id) {
+  if (DB) {
+    try {
+      const rows = await sb('positions?device_id=eq.' + encodeURIComponent(id) +
+        '&select=lat,lng,acc,battery,status,ts&order=created_at.desc&limit=200');
+      return (rows || []).reverse().map(r => ({ lat: r.lat, lng: r.lng, acc: r.acc, battery: r.battery, status: r.status, ts: r.ts }));
+    } catch (e) { console.error('[DB getFixes]', e.message); return []; }
+  }
+  return tracks.get(id) || [];
+}
+
+async function registerMember(account, device_id, name) {
+  const nm = (name || device_id).slice(0, 40);
+  if (DB) {
+    try {
+      await sb('members', {
+        method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ device_id, account, name: nm, updated_at: new Date().toISOString() })
+      });
+      return;
+    } catch (e) { console.error('[DB register]', e.message); }
+  }
+  if (!members.has(account)) members.set(account, new Map());
+  members.get(account).set(device_id, { name: nm });
+}
+
+async function getMembers(account) {
+  if (DB) {
+    try {
+      const rows = await sb('members?account=eq.' + encodeURIComponent(account) + '&select=device_id,name');
+      const list = [];
+      for (const m of (rows || [])) {
+        const fixes = await getFixes(m.device_id);
+        list.push({ id: m.device_id, name: m.name, last: fixes.length ? fixes[fixes.length - 1] : null, fixes });
+      }
+      return list;
+    } catch (e) { console.error('[DB members]', e.message); return []; }
+  }
+  const mm = members.get(account) || new Map();
+  return [...mm.entries()].map(([id, info]) => {
+    const fixes = tracks.get(id) || [];
+    return { id, name: info.name, last: fixes.length ? fixes[fixes.length - 1] : null, fixes };
+  });
 }
 function trackLink(id) {
   return BASE_URL + '/acompanhar.html?id=' + encodeURIComponent(id) +
@@ -361,6 +431,7 @@ async function sendWhatsApp(c, text) {
    ============================================================ */
 app.listen(PORT, () => {
   console.log('Servidor ativo na porta ' + PORT);
-  console.log('Telegram: ' + (TELEGRAM_BOT_TOKEN ? 'ON' : 'OFF') +
+  console.log('Banco: ' + (DB ? 'Supabase ON' : 'memoria (sem DB)') +
+              ' | Telegram: ' + (TELEGRAM_BOT_TOKEN ? 'ON' : 'OFF') +
               ' | WhatsApp: ' + (process.env.CALLMEBOT_APIKEY ? 'ON' : 'OFF'));
 });
