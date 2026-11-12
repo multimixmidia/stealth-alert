@@ -5,58 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0e3a39">
 <title>Multimix</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
 <style>
-  :root{--bg:#0e1512;--card:#152420;--line:#24352f;--txt:#eef4f1;--mut:#8ea39b;--ok:#1f9d57;--accent:#2f6f63}
+  :root{--bg:#0e1512;--card:#152420;--line:#24352f;--txt:#eef4f1;--mut:#8ea39b;--ok:#1f9d57;--warn:#d9a441;--bad:#e59b9b}
   *{box-sizing:border-box;margin:0;padding:0}
   [hidden]{display:none!important}
   html,body{height:100%}
-  body{font-family:-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--txt);
-       display:flex;flex-direction:column;max-width:480px;margin:0 auto}
-  header{padding:18px 22px 8px}
+  body{font-family:-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--txt);max-width:480px;margin:0 auto}
+  header{padding:18px 20px 6px}
   h1{font-size:20px;font-weight:800}
-  main{flex:1;overflow:auto;padding:8px 22px 90px}
+  h2{font-size:15px;font-weight:800;margin-bottom:10px}
+  main{padding:8px 20px 96px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
-  label{display:block;font-size:13px;color:var(--mut);margin-bottom:6px;font-weight:600}
+  label{display:block;font-size:13px;color:var(--mut);margin:0 0 6px;font-weight:600}
   input{width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:#0b100e;color:var(--txt);font-size:16px;font-family:inherit;margin-bottom:10px}
-  .st{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
-  .row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
-  .row:last-child{border:none}
-  .row span:last-child{color:var(--mut)}
-  .err{color:#e59b9b;font-size:13px;margin-top:8px;min-height:16px}
-  .note{font-size:12px;color:var(--mut);line-height:1.5;margin-top:12px}
-  .me{font-size:13px;color:var(--mut);margin-bottom:6px}
-  .me b{color:var(--txt)}
-  button,.btn{display:block;width:100%;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;font-family:inherit;text-align:center;text-decoration:none;cursor:pointer}
+  button,.btn{display:block;width:100%;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:700;font-family:inherit;text-align:center;text-decoration:none;cursor:pointer;color:var(--txt);background:#223029}
   .green{background:var(--ok);color:#fff}
-  .grey{background:#223029;color:var(--txt)}
-  iframe{width:100%;height:calc(100vh - 150px);border:0;border-radius:14px;background:var(--card)}
-  nav{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;display:flex;
-      background:#0b100e;border-top:1px solid var(--line)}
-  nav button{flex:1;background:none;color:var(--mut);font-size:12px;padding:12px 4px;border-radius:0;font-weight:600}
+  .link{background:none;color:var(--mut);font-weight:600;padding:10px}
+  .row2{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .row2>*{flex:1 1 30%;padding:10px 6px;font-size:13px;white-space:nowrap}
+  .danger{color:var(--bad)}
+  .st{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .kv:last-child{border:none}
+  .kv span:last-child{color:var(--mut);text-align:right}
+  .err{color:var(--bad);font-size:13px;margin-top:8px;min-height:16px}
+  .note{font-size:12px;color:var(--mut);line-height:1.5;margin:8px 0}
+  .item{padding:12px 0;border-bottom:1px solid var(--line)}
+  .item:last-child{border:none;padding-bottom:0}
+  .item .nm{font-weight:700;font-size:15px}
+  .item .sub{font-size:13px;color:var(--mut);margin-top:2px}
+  .chip{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:3px 9px;margin-left:6px;vertical-align:middle}
+  .chip.on{background:#173d2a;color:#7fe0a8}
+  .chip.wait{background:#3d3317;color:#e8c56f}
+  #map{height:42vh;border-radius:14px;margin-bottom:14px;background:var(--card);z-index:0}
+  .steps{counter-reset:s}
+  .steps .card h2::before{counter-increment:s;content:counter(s) ". "}
+  nav{position:fixed;bottom:0;left:0;right:0;max-width:480px;margin:0 auto;display:flex;background:#0b100e;border-top:1px solid var(--line);z-index:5}
+  nav button{flex:1;background:none;color:var(--mut);font-size:12px;padding:14px 2px;border-radius:0;font-weight:600}
   nav button.active{color:var(--txt);box-shadow:inset 0 3px 0 var(--ok)}
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:10}
+  #modal .card{width:100%;max-width:480px;margin:0 auto;border-radius:18px 18px 0 0}
+  #toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);background:#263a32;color:var(--txt);padding:10px 16px;border-radius:20px;font-size:13px;z-index:20;max-width:90%}
 </style>
 </head>
 <body>
   <header><h1>Multimix</h1></header>
 
-  <main>
+  <!-- ENTRAR / CRIAR CONTA -->
+  <main id="auth" hidden>
+    <div class="card">
+      <h2 id="authTitle">Entrar</h2>
+      <div id="signupOnly" hidden>
+        <label for="aNome">Seu nome</label>
+        <input id="aNome" type="text" maxlength="40" autocomplete="name" placeholder="Ex.: João">
+        <label for="aFone">Seu celular com DDD</label>
+        <input id="aFone" type="tel" maxlength="16" autocomplete="tel" placeholder="21 99999-0000">
+      </div>
+      <label for="aEmail">E-mail</label>
+      <input id="aEmail" type="email" autocomplete="email" placeholder="voce@email.com">
+      <label for="aSenha">Senha</label>
+      <input id="aSenha" type="password" autocomplete="current-password" placeholder="Mínimo 8 caracteres">
+      <div id="signupOnly2" hidden>
+        <label for="aCodigo">Código da família (se você foi convidado)</label>
+        <input id="aCodigo" type="text" maxlength="40" autocapitalize="off" autocomplete="off" placeholder="Opcional">
+      </div>
+      <button class="green" id="btnAuth">Entrar</button>
+      <div class="err" id="authErr"></div>
+      <button class="link" id="btnSwitch">Não tem conta? Criar conta</button>
+    </div>
+    <div class="note">O e-mail é usado para recuperar a conta. A recuperação de senha por e-mail será ativada em breve.</div>
+  </main>
+
+  <!-- APP -->
+  <main id="app" hidden>
     <!-- ABA 1: CADASTRO -->
     <section id="tab-cadastro" class="tab" hidden>
-      <div id="setup" class="card" hidden>
-        <label>Seu nome (aparece para a família)</label>
-        <input id="nome" type="text" maxlength="40" placeholder="Ex.: João">
-        <button class="green" id="btnEntrar">Entrar</button>
-        <div class="err" id="setupErr"></div>
+      <div class="card">
+        <h2>Seus dados</h2>
+        <label for="pNome">Nome (aparece para a família)</label>
+        <input id="pNome" type="text" maxlength="40">
+        <label for="pFone">Celular com DDD</label>
+        <input id="pFone" type="tel" maxlength="16">
+        <button id="btnPerfil">Salvar</button>
+        <div class="err" id="perfilMsg"></div>
       </div>
-      <div id="cadastrado" class="card" hidden>
-        <div class="me">Cadastrado como <b id="who">—</b></div>
-        <label style="margin-top:12px">Trocar nome</label>
-        <input id="novoNome" type="text" maxlength="40">
-        <button class="grey" id="btnRenomear">Salvar nome</button>
-        <div class="err" id="cadMsg"></div>
+
+      <div class="card">
+        <h2>Quem recebe seu alerta <span class="note" id="cCount"></span></h2>
+        <div class="note">Cada contato recebe um convite e ativa o aviso tocando em <b>Iniciar</b> no Telegram. Sem isso ele não recebe nada.</div>
+        <div id="cList"></div>
+        <div id="cForm" style="margin-top:12px">
+          <label for="cNome">Nome do contato</label>
+          <input id="cNome" type="text" maxlength="40" placeholder="Ex.: Maria (esposa)">
+          <label for="cFone">Celular com DDD</label>
+          <input id="cFone" type="tel" maxlength="16" placeholder="21 98888-0000">
+          <button class="green" id="btnAddContato">Adicionar contato</button>
+        </div>
+        <div class="err" id="cMsg"></div>
       </div>
-      <div class="note">O cadastro é automático: depois de informar o nome, o aparelho se registra e começa a enviar a localização sozinho.</div>
+
+      <div class="card">
+        <h2>Convidar familiar para o mapa</h2>
+        <div class="note">O familiar instala este app, cria a conta dele e usa o código da sua família. Ele passa a aparecer no mapa, vê todos da família e cadastra os próprios contatos de alerta.</div>
+        <div class="kv"><span>Código da família</span><span id="famCode">—</span></div>
+        <div class="row2">
+          <button class="green" id="btnFamZap">Enviar por WhatsApp</button>
+          <button id="btnFamCopy">Copiar convite</button>
+        </div>
+      </div>
+
+      <button class="link danger" id="btnSair">Sair da conta</button>
     </section>
 
     <!-- ABA 2: MINHA POSIÇÃO -->
@@ -64,109 +124,73 @@
       <div class="card">
         <div class="st"><span class="dot"></span><span id="status">Iniciando…</span></div>
         <div style="margin-top:12px">
-          <div class="row"><span>Última posição</span><span id="last">—</span></div>
-          <div class="row"><span>Atualizado</span><span id="upd">—</span></div>
-          <div class="row"><span>Envios</span><span id="count">0</span></div>
+          <div class="kv"><span>Última posição</span><span id="last">—</span></div>
+          <div class="kv"><span>Atualizado</span><span id="upd">—</span></div>
+          <div class="kv"><span>Envios</span><span id="count">0</span></div>
         </div>
         <div class="err" id="err"></div>
       </div>
       <div class="note">Para funcionar com a tela apagada: localização <b>"Permitir o tempo todo"</b> e bateria <b>"Sem restrições"</b> para este app.</div>
     </section>
 
-    <!-- ABA 3: MAPA DA FAMÍLIA -->
+    <!-- ABA 3: FAMÍLIA -->
     <section id="tab-familia" class="tab" hidden>
-      <iframe id="frameFamilia" title="Mapa da família"></iframe>
+      <div id="map"></div>
+      <div class="card">
+        <h2>Quem está no mapa</h2>
+        <div id="fList"><div class="note">Carregando…</div></div>
+        <div class="err" id="fMsg"></div>
+      </div>
     </section>
 
-    <!-- ABA 4: ANTIFURTO (download) -->
-    <section id="tab-antifurto" class="tab" hidden>
+    <!-- ABA 4: ANTIFURTO -->
+    <section id="tab-antifurto" class="tab steps" hidden>
       <div class="card">
-        <div class="st">Antifurto (Originali)</div>
-        <p class="note" style="margin:10px 0 14px">Baixe e instale o app do antifurto. Ele é um app separado, com senha de coação e alerta silencioso.</p>
-        <a class="btn green" id="linkAntifurto" href="#" target="_blank" rel="noopener">Baixar APK do antifurto</a>
+        <h2>Configurar o banco falso</h2>
+        <div class="note">Escolha um dos 3 bancos, o saldo que aparece e a senha de coação. Depois de salvar, toque em <b>Abrir decoy</b> e, no menu do navegador, em <b>Adicionar à tela inicial</b>.</div>
+        <a class="btn green" id="lnkConfig" target="_blank" rel="noopener">Configurar e escolher o banco</a>
       </div>
-      <div class="note">Se o Android pedir, permita a instalação de apps de fontes desconhecidas.</div>
+      <div class="card">
+        <h2>Baixar o app antifurto</h2>
+        <div class="note">Opcional. É o banco falso em formato de app. Se o Android pedir, permita instalar de fontes desconhecidas.</div>
+        <a class="btn" id="lnkApk" target="_blank" rel="noopener">Baixar app antifurto</a>
+      </div>
+      <div class="card">
+        <h2>Enviar para a família</h2>
+        <div class="note">Manda os links do banco falso e do app antifurto para seus familiares.</div>
+        <div class="row2">
+          <button class="green" id="btnAntiZap">Enviar por WhatsApp</button>
+          <button id="btnAntiCopy">Copiar links</button>
+        </div>
+      </div>
     </section>
+
+    <nav>
+      <button data-tab="cadastro">Cadastro</button>
+      <button data-tab="posicao">Minha posição</button>
+      <button data-tab="familia">Família</button>
+      <button data-tab="antifurto">Antifurto</button>
+    </nav>
   </main>
 
-  <nav>
-    <button data-tab="cadastro" class="active">Cadastro</button>
-    <button data-tab="posicao">Minha posição</button>
-    <button data-tab="familia">Família</button>
-    <button data-tab="antifurto">Antifurto</button>
-  </nav>
-
-  <script src="dist/main.js"></script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#0e3a39">
-<title>Multimix Rastreio</title>
-<style>
-  :root{--bg:#0e1512;--card:#152420;--line:#24352f;--txt:#eef4f1;--mut:#8ea39b;--ok:#1f9d57;--accent:#2f6f63}
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--txt);
-       padding:22px;max-width:480px;margin:0 auto}
-  h1{font-size:20px;font-weight:800}
-  .sub{color:var(--mut);font-size:13px;margin:4px 0 20px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
-  label{display:block;font-size:13px;color:var(--mut);margin-bottom:6px;font-weight:600}
-  input{width:100%;padding:13px;border-radius:11px;border:1px solid var(--line);background:#0b100e;color:var(--txt);font-size:16px;font-family:inherit}
-  .st{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok)}
-  .row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
-  .row:last-child{border:none}
-  .row span:last-child{color:var(--mut)}
-  .err{color:#e59b9b;font-size:13px;margin-top:8px;min-height:16px}
-  .btns{display:flex;gap:10px;margin-top:4px}
-  button{flex:1;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:700;font-family:inherit}
-  .green{background:var(--ok);color:#fff}
-  .grey{background:#223029;color:var(--txt)}
-  .note{font-size:12px;color:var(--mut);line-height:1.5;margin-top:14px}
-  .me{font-size:13px;color:var(--mut)}
-  .me b{color:var(--txt)}
-</style>
-</head>
-<body>
-  <h1>Multimix Rastreio</h1>
-  <div class="sub">Segurança familiar — localização em segundo plano.</div>
-
-  <!-- SETUP (primeiro acesso) -->
-  <div id="setup" style="display:none">
+  <!-- EDITAR (contato ou familiar) -->
+  <div id="modal" hidden>
     <div class="card">
-      <label>Seu nome (aparece para a família)</label>
-      <input id="nome" type="text" maxlength="40" placeholder="Ex.: João">
-      <div class="btns">
-        <button class="green" id="btnEntrar">Entrar</button>
+      <h2 id="mTitle">Editar</h2>
+      <label for="mNome">Nome</label>
+      <input id="mNome" type="text" maxlength="40">
+      <label for="mFone">Celular com DDD</label>
+      <input id="mFone" type="tel" maxlength="16">
+      <div class="err" id="mErr"></div>
+      <div class="row2">
+        <button class="green" id="mOk">Salvar</button>
+        <button id="mCancel">Cancelar</button>
       </div>
-      <div class="err" id="setupErr"></div>
     </div>
-    <div class="note">Seu nome e sua localização ficam visíveis apenas para quem tem o link da sua família.</div>
   </div>
+  <div id="toast" hidden></div>
 
-  <!-- STATUS -->
-  <div id="panel" style="display:none">
-    <div class="me">Você: <b id="who">—</b></div>
-    <div class="card" style="margin-top:10px">
-      <div class="st"><span class="dot"></span><span id="status">Iniciando…</span></div>
-      <div style="margin-top:12px">
-        <div class="row"><span>Última posição</span><span id="last">—</span></div>
-        <div class="row"><span>Atualizado</span><span id="upd">—</span></div>
-        <div class="row"><span>Envios</span><span id="count">0</span></div>
-      </div>
-      <div class="err" id="err"></div>
-    </div>
-    <div class="btns">
-      <button class="green" id="btnStart">Iniciar</button>
-      <button class="grey" id="btnStop">Parar</button>
-    </div>
-    <div class="note">Para funcionar com a tela apagada: localização <b>"Permitir o tempo todo"</b> e bateria <b>"Sem restrições"</b> para este app.</div>
-  </div>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
   <script src="dist/main.js"></script>
 </body>
 </html>

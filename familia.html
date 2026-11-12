@@ -112,10 +112,12 @@ function render(list){
     const last = m.last;
     // card
     const el = document.createElement('div'); el.className='mcard';
-    el.innerHTML = '<div class="top"><span class="ava" style="background:'+color+'">'+ini+'</span>'
-      + '<span class="nm">'+(m.name||m.id)+'</span></div>'
+    el.innerHTML = '<div class="top"><span class="ava" style="background:'+color+'"></span>'
+      + '<span class="nm"></span></div>'
       + '<div class="meta">'+(last ? (ago(last.ts)+' · '+(last.battery!=null?last.battery+'%':'n/d')) : 'sem posição')+'</div>'
       + '<button>Localizar agora</button>';
+    el.querySelector('.nm').textContent = m.name||m.id;
+    el.querySelector('.ava').textContent = ini;
     el.querySelector('button').onclick = (ev) => locate(m.id, ev.target);
     box.appendChild(el);
 

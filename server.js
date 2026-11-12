@@ -80,8 +80,8 @@ app.use((req, res, next) => {
 app.use(express.static(__dirname, { index: 'fake_bank.html' }));
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -193,7 +193,7 @@ document.getElementById('go').onclick = async () => {
 
 /* Rota de verificacao de versao (para confirmar deploy) */
 app.get('/version', (req, res) => {
-  res.json({ version: 'v5-db-robusto', db_configurado: DB, db_funcionando: dbReady, deployed_at: new Date().toISOString() });
+  res.json({ version: 'v6-contas', db_configurado: DB, db_funcionando: dbReady, deployed_at: new Date().toISOString() });
 });
 
 /* Diagnostico do banco: mostra o erro exato do Supabase */
@@ -202,6 +202,10 @@ app.get('/dbcheck', async (req, res) => {
   const out = { db: true, url: SUPABASE_URL };
   try { out.members_count = (await sb('members?select=device_id')).length; } catch (e) { out.members_error = e.message; }
   try { out.positions_count = (await sb('positions?select=id&limit=1')).length; } catch (e) { out.positions_error = e.message; }
+  try { out.profiles_count = (await sb('profiles?select=user_id')).length; } catch (e) { out.profiles_error = e.message; }
+  try { out.contacts_count = (await sb('contacts?select=id')).length; } catch (e) { out.contacts_error = e.message; }
+  try { await sb('members?select=user_id,phone&limit=1'); out.members_v2 = 'ok'; } catch (e) { out.members_v2_error = e.message; }
+  out.telegram_bot = v2.botUsername();
   try {
     await sb('positions', { method: 'POST', headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({ device_id: 'DBCHECK', lat: 0, lng: 0, acc: 0, battery: 0, status: 'LOCATION_UPDATE', ts: new Date().toISOString() }) });
@@ -304,9 +308,15 @@ async function processAlert(p) {
   // Desarmado: so registra, nao avisa o contato
   if (state === 'SAFE') { console.log('[DESARMADO] alerta registrado sem envio'); return; }
 
+  const text = buildText(event);
+  // Contatos cadastrados pelo dono do aparelho (Telegram, ate 5)
+  const chats = await v2.alertChats(p.device_id);
+  const jobs = chats.map(ch => sendTelegram(ch, (ch.owner_name ? 'Alerta de ' + ch.owner_name + '\n' : '') + text));
+  (await Promise.allSettled(jobs)).forEach(r => { if (r.status === 'rejected') console.error('[MENSAGERIA ERRO]', r.reason.message); });
+
   const c = EMERGENCY_CONTACTS[p.device_id];
-  if (!c) { console.warn('[SEM CONTATO] ' + p.device_id); return; }
-  await dispatchAll(c, buildText(event));
+  if (!c) { if (!chats.length) console.warn('[SEM CONTATO] ' + p.device_id); return; }
+  await dispatchAll(c, text);
 }
 
 function buildMapsLink(loc) {
@@ -479,6 +489,16 @@ async function sendWhatsApp(c, text) {
 }
 
 /* ============================================================
+   API v2 (contas, familia, contatos) - ver v2.js
+   ============================================================ */
+const v2 = require('./v2')(app, {
+  sb, getFixes, issueToken,
+  isDbReady: () => dbReady,
+  forgetMembers: (id) => { if (id) { for (const mm of members.values()) mm.delete(id); tracks.delete(id); } },
+  SUPABASE_URL, SUPABASE_KEY, TOKEN_SECRET, BASE_URL, TELEGRAM_BOT_TOKEN
+});
+
+/* ============================================================
    START
    ============================================================ */
 app.listen(PORT, () => {
@@ -486,4 +506,5 @@ app.listen(PORT, () => {
   console.log('Telegram: ' + (TELEGRAM_BOT_TOKEN ? 'ON' : 'OFF') +
               ' | WhatsApp: ' + (process.env.CALLMEBOT_APIKEY ? 'ON' : 'OFF'));
   dbSelfTest();
+  v2.initTelegram();
 });

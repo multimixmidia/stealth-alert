@@ -124,6 +124,23 @@ O servidor grava **sempre na memória e no banco**; se o banco falhar, cai para 
 
 ---
 
+## Contas, família e contatos (API v2 — `v2.js`)
+
+Login e senha ficam no **Supabase Auth** (só o hash da senha é guardado). Tabelas novas: `profiles` e `contacts`; `members` ganhou `user_id` e `phone`.
+
+| Método | Rota | Função |
+|---|---|---|
+| POST | `/api/v2/signup` · `/login` · `/refresh` | criar conta, entrar, renovar sessão |
+| GET/PUT | `/api/v2/me` | perfil, contatos e código da família |
+| POST | `/api/v2/device` | liga o aparelho à conta e devolve o token dele |
+| GET/POST/PUT/DELETE | `/api/v2/contacts` | até 5 contatos de alerta |
+| GET/PUT/DELETE | `/api/v2/family` | membros da família (editar/excluir) |
+| POST | `/api/v2/telegram/webhook` | o contato ativa o alerta com `/start CODIGO` no bot |
+
+O alerta de coação de um aparelho ligado a uma conta vai para os contatos ativos (Telegram) do dono.
+
+---
+
 ## Próximos passos
 1. **Unificar o app** — cadastro + minha posição + mapa da família em abas; cadastro automático (sem Parar/Iniciar).
 2. **Bloqueio falso ao desligar** (antifurto).
