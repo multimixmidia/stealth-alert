@@ -126,7 +126,7 @@ O servidor grava **sempre na memória e no banco**; se o banco falhar, cai para 
 
 ## Contas, família e contatos (API v2 — `v2.js`)
 
-Login e senha ficam no **Supabase Auth** (só o hash da senha é guardado). Tabelas novas: `profiles` e `contacts`; `members` ganhou `user_id` e `phone`.
+Login e senha ficam no **Supabase Auth** (só o hash da senha é guardado). Tabelas novas: `sa_profiles` e `contacts`; `members` ganhou `user_id` e `phone`.
 
 | Método | Rota | Função |
 |---|---|---|

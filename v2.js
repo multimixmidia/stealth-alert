@@ -88,7 +88,7 @@ module.exports = function mountV2(app, d) {
 
   /* ---------- banco ---------- */
   const one = async (q) => { const rows = await d.sb(q); return rows && rows.length ? rows[0] : null; };
-  const getProfile = (userId) => one('profiles?user_id=eq.' + enc(userId) + '&select=user_id,family_id,name,phone');
+  const getProfile = (userId) => one('sa_profiles?user_id=eq.' + enc(userId) + '&select=user_id,family_id,name,phone');
   const patch = (q, body) => d.sb(q, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
   const insert = (table, body) => d.sb(table, { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) });
   const del = (q) => d.sb(q, { method: 'DELETE' });
@@ -160,7 +160,7 @@ module.exports = function mountV2(app, d) {
     }
     const userId = cr.json.id;
     try {
-      await insert('profiles', { user_id: userId, family_id: familyId, name, phone });
+      await insert('sa_profiles', { user_id: userId, family_id: familyId, name, phone });
     } catch (e) {
       await auth('admin/users/' + enc(userId), { method: 'DELETE' }).catch(() => {});
       throw e;
@@ -204,7 +204,7 @@ module.exports = function mountV2(app, d) {
     const name = clean((req.body || {}).name, 40), phone = cleanPhone((req.body || {}).phone);
     if (!name) return fail(res, 400, 'Informe seu nome');
     if (phone.length < 10) return fail(res, 400, 'Informe o celular com DDD');
-    await patch('profiles?user_id=eq.' + enc(req.profile.user_id), { name, phone });
+    await patch('sa_profiles?user_id=eq.' + enc(req.profile.user_id), { name, phone });
     // mantem o nome dos aparelhos da pessoa igual ao do perfil
     await patch('members?user_id=eq.' + enc(req.profile.user_id), { name, phone, updated_at: new Date().toISOString() });
     d.forgetMembers();
@@ -291,7 +291,7 @@ module.exports = function mountV2(app, d) {
     const row = await familyRow(req);
     if (!row) return fail(res, 404, 'Membro nao encontrado');
     await patch('members?device_id=eq.' + enc(row.device_id), { name, phone: phone || null, updated_at: new Date().toISOString() });
-    if (row.user_id) await patch('profiles?user_id=eq.' + enc(row.user_id), phone ? { name, phone } : { name });
+    if (row.user_id) await patch('sa_profiles?user_id=eq.' + enc(row.user_id), phone ? { name, phone } : { name });
     d.forgetMembers();
     res.json({ ok: true });
   }));
@@ -303,7 +303,7 @@ module.exports = function mountV2(app, d) {
     await del('members?device_id=eq.' + enc(row.device_id));
     await del('positions?device_id=eq.' + enc(row.device_id));
     // a pessoa removida sai da familia (passa a ter uma familia propria)
-    if (row.user_id) await patch('profiles?user_id=eq.' + enc(row.user_id), { family_id: crypto.randomUUID() });
+    if (row.user_id) await patch('sa_profiles?user_id=eq.' + enc(row.user_id), { family_id: crypto.randomUUID() });
     d.forgetMembers(row.device_id);
     res.json({ ok: true });
   }));

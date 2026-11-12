@@ -202,7 +202,7 @@ app.get('/dbcheck', async (req, res) => {
   const out = { db: true, url: SUPABASE_URL };
   try { out.members_count = (await sb('members?select=device_id')).length; } catch (e) { out.members_error = e.message; }
   try { out.positions_count = (await sb('positions?select=id&limit=1')).length; } catch (e) { out.positions_error = e.message; }
-  try { out.profiles_count = (await sb('profiles?select=user_id')).length; } catch (e) { out.profiles_error = e.message; }
+  try { out.profiles_count = (await sb('sa_profiles?select=user_id')).length; } catch (e) { out.profiles_error = e.message; }
   try { out.contacts_count = (await sb('contacts?select=id')).length; } catch (e) { out.contacts_error = e.message; }
   try { await sb('members?select=user_id,phone&limit=1'); out.members_v2 = 'ok'; } catch (e) { out.members_v2_error = e.message; }
   out.telegram_bot = v2.botUsername();
