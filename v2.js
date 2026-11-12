@@ -153,10 +153,13 @@ module.exports = function mountV2(app, d) {
     const cr = await auth('admin/users', { method: 'POST', body: { email, password, email_confirm: true } });
     if (!cr.ok || !cr.json.id) {
       const code = cr.json.error_code || '';
-      if (cr.status === 422 || /exist|registered/i.test(code + ' ' + (cr.json.msg || '')))
+      const msg = String(cr.json.msg || cr.json.message || cr.json.error_description || cr.json.error || '');
+      console.error('[v2 signup]', cr.status, JSON.stringify(cr.json).slice(0, 300));
+      if (code === 'email_exists' || /already (been )?registered|already exists/i.test(msg))
         return fail(res, 409, 'Este e-mail ja tem cadastro. Use Entrar.');
-      console.error('[v2 signup]', cr.status, JSON.stringify(cr.json).slice(0, 200));
-      return fail(res, 500, 'Nao foi possivel criar a conta');
+      if (code === 'weak_password')
+        return fail(res, 400, 'Senha fraca. Use letras maiusculas, minusculas e numeros.');
+      return fail(res, 500, 'Nao foi possivel criar a conta (' + (code || cr.status) + (msg ? ': ' + msg.slice(0, 120) : '') + ')');
     }
     const userId = cr.json.id;
     try {
