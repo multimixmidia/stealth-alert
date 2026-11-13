@@ -20,8 +20,8 @@ Projeto do SaaS Multimix. Um motor de localização que atende **três produtos*
 ### Apps para instalar (GitHub Releases)
 | App | Link |
 |---|---|
-| Antifurto (Originali) | https://github.com/multimixmidia/stealth-alert/releases/download/app-latest/app-debug.apk |
-| Rastreio família | https://github.com/multimixmidia/stealth-alert/releases/download/tracker-latest/app-debug.apk |
+| Antifurto (Originali) | https://github.com/multimixmidia/stealth-alert/releases/download/app-latest/antifurto.apk |
+| Rastreio família | https://github.com/multimixmidia/stealth-alert/releases/download/tracker-latest/multimix.apk |
 
 > APKs de teste (debug). A assinatura muda a cada build, então para atualizar pode ser preciso desinstalar o anterior.
 

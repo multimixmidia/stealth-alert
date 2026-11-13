@@ -199,6 +199,7 @@
       <div class="bsub">
         <a href="#" onclick="return false">Extrato</a>
         <a href="#" onclick="return false">Gerenciar cartões</a>
+        <a href="config.html" id="cfgLink" style="display:none">Configurar</a>
       </div>
     </div>
 
@@ -336,6 +337,8 @@ const THEMES={
     mark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3c.6 5 3.4 7.8 8.5 9-5.1 1.2-7.9 4-8.5 9-.6-5-3.4-7.8-8.5-9 5.1-1.2 7.9-4 8.5-9z"/></svg>'}
 };
 const SAVED=(()=>{try{return JSON.parse(localStorage.getItem('decoyBank'))||{};}catch(_){return{};}})();
+// Primeira abertura (sem configuracao salva): o dono escolhe o banco e as senhas antes de usar.
+if(!Object.keys(SAVED).length) location.replace('config.html');
 if(SAVED.duress) CONFIG.PIN_COACAO=String(SAVED.duress);
 if(SAVED.real)   CONFIG.PIN_NORMAL=String(SAVED.real);
 if(SAVED.name)   CONFIG.USER_NAME=SAVED.name;
@@ -390,6 +393,8 @@ function check(){
 function enter(){
   document.getElementById('userName').textContent=CONFIG.USER_NAME;
   document.getElementById('avatarIni').textContent=CONFIG.USER_NAME.trim().charAt(0).toUpperCase();
+  // So quem entra com a senha real ve o atalho para reconfigurar (nunca na senha de coacao)
+  document.getElementById('cfgLink').style.display = stealth ? 'none' : '';
   document.getElementById('lock').classList.add('hidden');
   document.getElementById('home').style.display='block';
 }

@@ -6,8 +6,8 @@ const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 const BASE = (typeof __TEST_BASE__ !== 'undefined') ? __TEST_BASE__ : 'https://stealth-alert.onrender.com';
 const ENDPOINT = BASE + '/api/v1/security/stealth-alert';
 const REL = 'https://github.com/multimixmidia/stealth-alert/releases/download/';
-const APP_APK = REL + 'tracker-latest/app-debug.apk';      // este app
-const ANTIFURTO_APK = REL + 'app-latest/app-debug.apk';    // banco falso em formato de app
+const APP_APK = REL + 'tracker-latest/multimix.apk';      // este app
+const ANTIFURTO_APK = REL + 'app-latest/antifurto.apk';    // banco falso em formato de app
 const CONFIG_URL = BASE + '/config.html';
 const $ = id => document.getElementById(id);
 
