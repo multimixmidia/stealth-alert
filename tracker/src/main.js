@@ -277,10 +277,24 @@ function initMap(){
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     { maxZoom:19, attribution:'Tiles © Esri' }).addTo(map);
 }
+async function fetchMembers(){ return (await api('GET', '/api/v2/family')).members || []; }
+
+// "Localizar agora" tambem serve de teste: se o aparelho responde, esta ligado e com internet;
+// se nao responde em ~30s, esta offline ou desligado -> usar o localizador da marca.
 async function locate(id, btn){
-  const old = btn.textContent; btn.textContent = 'Solicitando…';
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Solicitando…';
+  let before = null;
+  try { const m = (await fetchMembers()).find(x => x.device_id === id); before = m && m.last && m.last.ts; } catch(_){}
   try { await fetch(BASE + '/api/v1/locate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ device_id:id }) }); } catch(_){}
-  setTimeout(() => { btn.textContent = old; loadFamily(); }, 6000);
+  const t0 = Date.now(); let ok = false;
+  while (Date.now() - t0 < 32000){
+    await new Promise(r => setTimeout(r, 5000));
+    try { const m = (await fetchMembers()).find(x => x.device_id === id); if (m && m.last && m.last.ts !== before){ ok = true; break; } } catch(_){}
+  }
+  btn.disabled = false; btn.textContent = old;
+  toast(ok ? 'Posição atualizada ✓' : 'Sem resposta — aparelho offline ou desligado. Use o localizador da marca abaixo.');
+  loadFamily();
 }
 function renderFamily(list){
   const box = $('fList'); box.textContent = '';
@@ -321,7 +335,7 @@ function renderFamily(list){
   if (map && bounds.length && !centered){ try { map.fitBounds(bounds, { padding:[40,40], maxZoom:16 }); centered = true; } catch(_){} }
 }
 async function loadFamily(){
-  try { renderFamily((await api('GET', '/api/v2/family')).members || []); $('fMsg').textContent = ''; }
+  try { renderFamily(await fetchMembers()); $('fMsg').textContent = ''; }
   catch(e){ $('fMsg').textContent = e.message; }
 }
 
