@@ -32,6 +32,17 @@ jobs:
         working-directory: app
         run: npx cap sync android
 
+      - name: Assinatura fixa (se o segredo DEBUG_KEYSTORE_B64 existir)
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            echo "Assinatura fixa aplicada (atualiza por cima do app anterior)."
+          else
+            echo "Sem DEBUG_KEYSTORE_B64: assinatura muda a cada build (precisa desinstalar para atualizar)."
+          fi
       - name: Build debug APK
         working-directory: app/android
         run: |
