@@ -362,6 +362,53 @@ async function enterApp(fresh){
   startTracking();
 }
 
+/* ============================================================
+   ACHAR O CELULAR DESLIGADO / SEM INTERNET
+   Cada marca tem o seu recurso de fabrica; aqui detectamos o
+   aparelho e levamos o cliente ao lugar certo de ativar.
+   ============================================================ */
+function renderOffline(){
+  const ua = navigator.userAgent || '';
+  const isiOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isSamsung = /samsung|SM-[A-Z0-9]+|GT-[A-Z0-9]+|Galaxy/i.test(ua);
+  const isXiaomi  = /xiaomi|redmi|poco|mi\s/i.test(ua);
+  const isMoto    = /moto|motorola/i.test(ua);
+
+  let title, intro, steps, btnTxt, href, note;
+  if (isiOS){
+    title = 'Achar o iPhone desligado ou sem internet';
+    steps = ['Abra Ajustes e toque no seu nome, depois em "Buscar".',
+             'Ligue "Buscar iPhone", "Rede do app Buscar" e "Enviar Última Localização".'];
+    btnTxt = null;
+    note = 'No iPhone 11 ou mais novo, ele pode ser achado por algumas horas mesmo desligado ou em modo avião.';
+  } else if (isSamsung){
+    title = 'Achar o celular desligado ou sem internet (Samsung)';
+    steps = ['Abra o app "Samsung Find" (ou SmartThings Find).',
+             'Toque em Mais opções → Configurações.',
+             'Ative "Busca off-line" para este aparelho.'];
+    btnTxt = 'Abrir o Samsung Find'; href = 'https://findmymobile.samsung.com';
+    note = 'Com a Busca off-line ligada, outros Galaxy por perto ajudam a localizar mesmo sem sinal. Modelos recentes também localizam desligados.';
+  } else {
+    const marca = isXiaomi ? 'Xiaomi' : isMoto ? 'Motorola' : 'Android';
+    title = 'Achar o celular desligado ou sem internet (' + marca + ')';
+    steps = ['Abra o app "Buscar Meu Dispositivo" (Find Hub) do Google — já vem instalado.',
+             'Entre com a conta Google deste celular.',
+             'Ative "Buscar meu dispositivo" e a opção de rede ("com rede em todas as áreas").'];
+    btnTxt = 'Abrir o Buscar do Google'; href = 'https://www.google.com/android/find';
+    note = isXiaomi
+      ? 'A Xiaomi também tem o "Encontrar dispositivo" na conta Mi — vale ativar os dois. Achar desligado depende do modelo.'
+      : 'A rede do Google acha o celular por aparelhos Android por perto, mesmo sem internet. Achar desligado depende do modelo.';
+  }
+
+  $('offTitle').textContent = title;
+  const ol = $('offSteps'); ol.textContent = '';
+  steps.forEach(s => { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); });
+  const btn = $('btnOffline');
+  if (btnTxt){ btn.textContent = btnTxt; btn.href = href; btn.hidden = false; }
+  else btn.hidden = true;
+  $('offNote').textContent = note;
+}
+
 function init(){
   document.querySelectorAll('nav button').forEach(b => { b.onclick = () => showTab(b.dataset.tab); });
   $('btnAuth').onclick = doAuth;
@@ -375,6 +422,8 @@ function init(){
   $('lnkApk').href = ANTIFURTO_APK;
   $('btnAntiZap').onclick = () => whats(antifurtoText());
   $('btnAntiCopy').onclick = () => copy(antifurtoText());
+
+  renderOffline();
 
   if (session && session.access_token) enterApp(false);
   else { $('auth').hidden = false; setAuthMode(false); }
