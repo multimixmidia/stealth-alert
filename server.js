@@ -58,7 +58,7 @@ const EMERGENCY_CONTACTS = {
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 
-const VALID_STATUS = new Set(['DURESS_LOGIN', 'PIX_ATTEMPT', 'LOCATION_UPDATE']);
+const VALID_STATUS = new Set(['DURESS_LOGIN', 'PIX_ATTEMPT', 'LOCATION_UPDATE', 'PANIC']);
 
 // Estado em memoria por aparelho: 'ALERT' (em perigo) | 'SAFE' (desarmado)
 // Producao: guardar em banco (o Render gratis reinicia e zera a memoria).
@@ -282,7 +282,7 @@ app.get('/api/v1/locate-check', (req, res) => {
    ============================================================ */
 async function processAlert(p) {
   // Novo login de coacao reativa o modo alerta
-  if (p.status === 'DURESS_LOGIN') deviceState.set(p.device_id, 'ALERT');
+  if (p.status === 'DURESS_LOGIN' || p.status === 'PANIC') deviceState.set(p.device_id, 'ALERT');
   const state = deviceState.get(p.device_id) || 'ALERT';
 
   const event = {
@@ -429,6 +429,7 @@ function fmtTime(iso) {
 function buildText(ev) {
   const motivo = {
     DURESS_LOGIN: 'Senha de coacao utilizada',
+    PANIC: 'Emergencia acionada pelo aplicativo',
     PIX_ATTEMPT: 'Tentativa de Pix no ambiente isca',
     LOCATION_UPDATE: 'Atualizacao de localizacao'
   }[ev.status];

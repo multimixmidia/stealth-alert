@@ -185,6 +185,52 @@ async function pollLocate(){
 }
 
 /* ============================================================
+   BOTÃO DE EMERGÊNCIA (pânico) — envia o alerta aos contatos
+   ============================================================ */
+async function panicSend(retry = true){
+  if (!device || !device.token) { try { await linkDevice(); } catch(_){ return false; } }
+  const loc = await freshFix() || lastLoc;
+  try {
+    const r = await fetch(ENDPOINT, {
+      method:'POST', headers:{'Content-Type':'application/json'}, keepalive:true,
+      body: JSON.stringify({
+        device_id: device.id, auth_token: device.token, status:'PANIC', battery_level: await battery(),
+        location: loc
+          ? { latitude: loc.latitude, longitude: loc.longitude, accuracy_m: Math.round(loc.accuracy || 0), timestamp: new Date(loc.time || Date.now()).toISOString() }
+          : { latitude: null, longitude: null, timestamp: new Date().toISOString() }
+      })
+    });
+    if (r.status === 401 && retry){ device.token = null; return panicSend(false); }
+    return r.ok;
+  } catch(_){ return false; }
+}
+function setupPanic(){
+  const b = $('btnPanic'); if (!b) return;
+  const label = 'Segure 3s para enviar alerta';
+  let timer = null, firing = false;
+  const cancel = () => { if (timer){ clearInterval(timer); timer = null; if (!firing) b.textContent = label; } };
+  const start = (e) => {
+    e.preventDefault(); if (firing || timer) return;
+    let left = 3; b.textContent = 'Mantenha pressionado… ' + left;
+    timer = setInterval(() => {
+      left--;
+      if (left > 0){ b.textContent = 'Mantenha pressionado… ' + left; }
+      else { clearInterval(timer); timer = null; fire(); }
+    }, 1000);
+  };
+  async function fire(){
+    firing = true; b.disabled = true; b.textContent = 'Enviando alerta…'; $('panicMsg').textContent = '';
+    const ok = await panicSend();
+    b.disabled = false; firing = false; b.textContent = label;
+    $('panicMsg').style.color = ok ? 'var(--ok)' : 'var(--bad)';
+    $('panicMsg').textContent = ok ? 'Alerta enviado aos seus contatos.' : 'Falha ao enviar. Tente de novo.';
+    toast(ok ? 'Alerta de emergência enviado' : 'Falha ao enviar o alerta');
+  }
+  ['pointerdown','touchstart'].forEach(ev => b.addEventListener(ev, start));
+  ['pointerup','pointerleave','pointercancel','touchend','touchcancel'].forEach(ev => b.addEventListener(ev, cancel));
+}
+
+/* ============================================================
    JANELA DE EDIÇÃO (contato ou familiar)
    ============================================================ */
 function editDialog(title, name, phone, onSave){
@@ -249,6 +295,13 @@ async function loadMe(){
   $('pNome').value = me.profile.name; $('pFone').value = fmtPhone(me.profile.phone);
   $('famCode').textContent = me.family_code;
   renderContacts();
+  updatePanicHint();
+}
+function updatePanicHint(){
+  const h = $('panicHint'); if (!h || !me) return;
+  const active = (me.contacts || []).filter(c => c.active).length;
+  if (active) { h.textContent = ''; }
+  else { h.style.color = 'var(--warn)'; h.textContent = 'Nenhum contato ativo ainda. Cadastre e ative contatos na aba Cadastro para que o alerta chegue a alguém.'; }
 }
 async function saveProfile(){
   $('perfilMsg').textContent = '';
@@ -451,6 +504,7 @@ function init(){
   $('btnAntiCopy').onclick = () => copy(antifurtoText());
 
   renderOffline();
+  setupPanic();
 
   if (session && session.access_token) enterApp(false);
   else { $('auth').hidden = false; setAuthMode(false); }
